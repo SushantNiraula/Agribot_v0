@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<robot name="agribot" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Properties -->
+  <xacro:include filename="$(find agribot_description)/urdf/properties/agribot.properties.xacro"/>
+
+  <!-- Mech -->
+  <xacro:include filename="$(find agribot_description)/urdf/mech/base_mesh.urdf.xacro"/>
+  <xacro:include filename="$(find agribot_description)/urdf/mech/wheel_mesh.urdf.xacro"/>
+
+  <!-- Base -->
+  <xacro:base_mesh mesh_file="${base_mesh_file}"/>
+
+  <!-- Left wheels -->
+  <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
+    joint_name="left_wheel_front_joint" link_name="left_wheel_link_front"
+    xyz="${lf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+  <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
+    joint_name="left_wheel_mid_joint" link_name="left_wheel_link_mid"
+    xyz="${lm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+  <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
+    joint_name="left_wheel_rear_joint" link_name="left_wheel_link_rear"
+    xyz="${lr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+  <!-- Right wheels -->
+  <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
+    joint_name="right_wheel_front_joint" link_name="right_wheel_link_front"
+    xyz="${rf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+  <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
+    joint_name="right_wheel_mid_joint" link_name="right_wheel_link_mid"
+    xyz="${rm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+  <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
+    joint_name="right_wheel_rear_joint" link_name="right_wheel_link_rear"
+    xyz="${rr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+
+</robot>

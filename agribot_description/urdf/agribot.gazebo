@@ -1,0 +1,186 @@
+<?xml version="1.0" ?>
+<robot name="agribot" xmlns:xacro="http://www.ros.org/wiki/xacro" >
+
+<xacro:property name="body_color" value="Gazebo/Silver" />
+<xacro:property name="wheel_color" value="Gazebo/Silver" />
+
+<gazebo reference="base_link">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+  <gravity>true</gravity>
+</gazebo>
+
+<gazebo reference="motor_mount_1">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_mount_2">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_mount_3">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_mount_4">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_mount_5">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_mount_6">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_1">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_2">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_3">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_4">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_5">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="motor_6">
+  <material>${body_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="right_rear_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+
+</gazebo>
+
+<gazebo reference="right_mid_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+</gazebo>
+
+<gazebo reference="right_front_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+</gazebo>
+
+<gazebo reference="left_front_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+</gazebo>
+
+<gazebo reference="left_mid_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+</gazebo>
+
+<gazebo reference="left_rear_link_1">
+  <material>${wheel_color}</material>
+  <mu1>1.5</mu1>
+  <mu2>0.6</mu2>
+  <fdir1>1 0 0</fdir1>
+  <kp>100000</kp>
+  <kd>10</kd>
+  <minDepth>0.001</minDepth>
+</gazebo>
+
+<gazebo reference="imu_link_1">
+  <material>${wheel_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="lidar_link_1">
+  <material>${wheel_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+
+<gazebo reference="camera_link_1">
+  <material>${wheel_color}</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <self_collide>true</self_collide>
+</gazebo>
+<gazebo>
+        <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+            <parameters>$(find agribot_controller)/config/agribot_controller.yaml</parameters>
+        </plugin>
+  </gazebo>
+
+</robot>

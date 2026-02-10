@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Meshes -->
+  <xacro:property name="base_mesh_file"
+    value="file://$(find agribot_description)/meshes/agribot_baselink.stl"/>
+
+  <xacro:property name="left_wheel_mesh_file"
+    value="file://$(find agribot_description)/meshes/agribot_left_wheel.stl"/>
+
+  <xacro:property name="right_wheel_mesh_file"
+    value="file://$(find agribot_description)/meshes/agribot_right_wheel.stl"/>
+
+  <!-- Wheel joint origins (copied from your URDF) -->
+  <xacro:property name="lf_xyz" value="0.35606  0.22973 -0.22532" />
+  <xacro:property name="lm_xyz" value="0.00635  0.22973 -0.22532" />
+  <xacro:property name="lr_xyz" value="-0.29606 0.22973 -0.22532" />
+
+  <xacro:property name="rf_xyz" value="0.35606  -0.22973 -0.22532" />
+  <xacro:property name="rm_xyz" value="0.00635  -0.22973 -0.22532" />
+  <xacro:property name="rr_xyz" value="-0.29606 -0.22973 -0.22532" />
+
+  <!-- Shared orientation + joint axis -->
+  <xacro:property name="wheel_rpy" value="0 0 0"/>
+  <xacro:property name="wheel_axis" value="0 1 0"/>
+
+  <!-- For later: controllers/odom math (placeholder until measured) -->
+  <xacro:property name="wheel_separation" value="0.45946"/> <!-- 2*0.22973 -->
+  <xacro:property name="wheel_radius" value="0.10"/> <!-- TODO: set real radius in meters -->
+
+</robot>
