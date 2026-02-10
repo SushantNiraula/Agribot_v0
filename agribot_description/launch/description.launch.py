@@ -5,13 +5,18 @@ from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitut
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     urdf_path = PathJoinSubstitution(
-        [FindPackageShare("agribot_description"), "urdf", "agribot.xacro"]
+        [FindPackageShare("agribot_description"), "urdf/robots", "agribot.urdf.xacro"]
     )
     rviz_config_path = PathJoinSubstitution(
         [FindPackageShare('agribot_description'),'rviz','description.rviz']
+    )
+    robot_description = ParameterValue(
+        Command(['xacro', ' ', urdf_path]),
+        value_type=str
     )
 
     return LaunchDescription([
@@ -52,7 +57,7 @@ def generate_launch_description():
             parameters=[
                 {
                     'use_sim_time': LaunchConfiguration('use_sim_time'),
-                    'robot_description': Command(['xacro ', LaunchConfiguration('urdf')])
+                    'robot_description': robot_description,
                 }
             ]
         ),
@@ -64,6 +69,12 @@ def generate_launch_description():
             arguments=['-d', rviz_config_path],
             condition = IfCondition(LaunchConfiguration("rviz")),
             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}]
-        )
+        ),
+        Node(
+        package="foxglove_bridge",
+        executable="foxglove_bridge",
+        output="screen",
+        # Default port is 8765. We'll keep it default for now.
+    )
     ]
     )

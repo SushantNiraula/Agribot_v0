@@ -3,13 +3,13 @@
 
   <!-- Meshes -->
   <xacro:property name="base_mesh_file"
-    value="file://$(find agribot_description)/meshes/agribot_baselink.stl"/>
+    value="package://agribot_description/meshes/agribot_baselink.stl"/>
 
   <xacro:property name="left_wheel_mesh_file"
-    value="file://$(find agribot_description)/meshes/agribot_left_wheel.stl"/>
+    value="package://agribot_description/meshes/agribot_left_wheel.stl"/>
 
   <xacro:property name="right_wheel_mesh_file"
-    value="file://$(find agribot_description)/meshes/agribot_right_wheel.stl"/>
+    value="package://agribot_description/meshes/agribot_right_wheel.stl"/>
 
   <!-- Wheel joint origins (copied from your URDF) -->
   <xacro:property name="lf_xyz" value="0.35606  0.22973 -0.22532" />
