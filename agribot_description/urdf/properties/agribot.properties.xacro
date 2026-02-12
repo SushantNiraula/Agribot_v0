@@ -25,7 +25,29 @@
   <xacro:property name="wheel_axis" value="0 1 0"/>
 
   <!-- For later: controllers/odom math (placeholder until measured) -->
-  <xacro:property name="wheel_separation" value="0.45946"/> <!-- 2*0.22973 -->
-  <xacro:property name="wheel_radius" value="0.10"/> <!-- TODO: set real radius in meters -->
+  <xacro:property name="wheel_separation" value="0.51"/> 
+  <xacro:property name="wheel_radius" value="0.05"/> 
+    <!-- Base inertial (Fusion -> URDF SI units) -->
+  <xacro:property name="base_mass" value="4.248128"/>
+  <xacro:property name="base_com"  value="0.02623 -0.000536 -0.042696"/>
+
+  <xacro:property name="base_ixx" value="0.1076"/>
+  <xacro:property name="base_iyy" value="0.1189"/>
+  <xacro:property name="base_izz" value="0.1484"/>
+  <xacro:property name="base_ixy" value="0.000001115543"/>
+  <xacro:property name="base_ixz" value="-0.003339"/>
+  <xacro:property name="base_iyz" value="0.0002084"/>
+
+  <!-- Wheel inertial -->
+  <xacro:property name="wheel_mass" value="0.223669"/>
+  <xacro:property name="wheel_com"  value="0 0.001512 0"/>
+
+  <xacro:property name="wheel_ixx" value="0.000183"/>
+  <xacro:property name="wheel_iyy" value="0.0003286"/>
+  <xacro:property name="wheel_izz" value="0.000183"/>
+  <xacro:property name="wheel_ixy" value="0.0"/>
+  <xacro:property name="wheel_ixz" value="0.0"/>
+  <xacro:property name="wheel_iyz" value="0.0"/>
+
 
 </robot>

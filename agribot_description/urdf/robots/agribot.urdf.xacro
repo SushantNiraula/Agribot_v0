@@ -9,32 +9,57 @@
   <xacro:include filename="$(find agribot_description)/urdf/mech/wheel_mesh.urdf.xacro"/>
 
   <!-- Base -->
-  <xacro:base_mesh mesh_file="${base_mesh_file}"/>
+    <xacro:base_mesh
+    mesh_file="${base_mesh_file}"
+    mass="${base_mass}"
+    com="${base_com}"
+    ixx="${base_ixx}" iyy="${base_iyy}" izz="${base_izz}"
+    ixy="${base_ixy}" ixz="${base_ixz}" iyz="${base_iyz}"/>
+
 
   <!-- Left wheels -->
+
   <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
     joint_name="left_wheel_front_joint" link_name="left_wheel_link_front"
-    xyz="${lf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+    xyz="${lf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
 
   <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
     joint_name="left_wheel_mid_joint" link_name="left_wheel_link_mid"
-    xyz="${lm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+    xyz="${lm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
 
   <xacro:wheel_mesh mesh_file="${left_wheel_mesh_file}" parent="base_link"
     joint_name="left_wheel_rear_joint" link_name="left_wheel_link_rear"
-    xyz="${lr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+    xyz="${lr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
 
   <!-- Right wheels -->
   <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
     joint_name="right_wheel_front_joint" link_name="right_wheel_link_front"
-    xyz="${rf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+    xyz="${rf_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
 
   <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
     joint_name="right_wheel_mid_joint" link_name="right_wheel_link_mid"
-    xyz="${rm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
-
+    xyz="${rm_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
+  
   <xacro:wheel_mesh mesh_file="${right_wheel_mesh_file}" parent="base_link"
     joint_name="right_wheel_rear_joint" link_name="right_wheel_link_rear"
-    xyz="${rr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"/>
+    xyz="${rr_xyz}" rpy="${wheel_rpy}" axis="${wheel_axis}"
+    mass="${wheel_mass}" com="${wheel_com}"
+    ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
+    ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
 
 </robot>
