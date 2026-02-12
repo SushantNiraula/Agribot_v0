@@ -23,17 +23,65 @@
           <mesh filename="${mesh_file}" scale="0.001 0.001 0.001"/>
         </geometry>
       </visual>
+      
+      <!--Collision for box of base link-->
 
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-          <box size="0.18986 0.3838 0.0269" />
+          <box size="0.19986 0.4238 0.0269" />
+        </geometry>
+      </collision>
+      <!--Collision for rocker left side-->
+      <collision>
+        <origin xyz="0.21986 0.2038 -0.12059" rpy="0 2.255 0"/>
+        <geometry>
+          <cylinder length="0.3568" radius="0.0119" />
+        </geometry>
+      </collision>
+      <!--Collision for rocker right side-->
+      <collision>
+        <origin xyz="0.21986 -0.2038 -0.12059" rpy="0 2.255 0"/>
+        <geometry>
+          <cylinder length="0.3568" radius="0.0119" />
+        </geometry>
+      </collision>
+      <!--Collision for bogie left side-->
+      <collision>
+        <origin xyz="-0.12493 0.2038 -0.042465" rpy="0 0.785 0"/>
+        <geometry>
+          <cylinder length="0.10493" radius="0.0119" />
         </geometry>
       </collision>
       <collision>
-        <origin xyz="0.09493 0.1919 -0.18" rpy="0 2.355 0"/>
+        <origin xyz="-0.246395 0.2038 -0.16393" rpy="0 0.785 0"/>
         <geometry>
-          <cylinder length="0.33118" radius="0.0119" />
+          <cylinder length="0.24293" radius="0.0119" />
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="-0.086395 0.2038 -0.16393" rpy="0 2.255 0"/>
+        <geometry>
+          <cylinder length="0.24293" radius="0.0119" />
+        </geometry>
+      </collision>
+      <!--Collision for bogie right side-->
+      <collision>
+        <origin xyz="-0.12493 -0.2038 -0.042465" rpy="0 0.785 0"/>
+        <geometry>
+          <cylinder length="0.10493" radius="0.0119" />
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="-0.246395 -0.2038 -0.16393" rpy="0 0.785 0"/>
+        <geometry>
+          <cylinder length="0.24293" radius="0.0119" />
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="-0.086395 -0.2038 -0.16393" rpy="0 2.255 0"/>
+        <geometry>
+          <cylinder length="0.24293" radius="0.0119" />
         </geometry>
       </collision>
 
