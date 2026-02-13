@@ -14,7 +14,7 @@ def generate_launch_description():
     bringup_share = get_package_share_directory('agribot_bringup')
 
 
-    robot_description_file = os.path.join(pkg_ros_gz_rbot, 'urdf', 'agribot.xacro')
+    robot_description_file = os.path.join(pkg_ros_gz_rbot, 'urdf/urdf', 'agribot.urdf.xacro')
     ros_gz_bridge_config = os.path.join(bringup_share, 'config', 'ros_gz_bridge_gazebo.yaml')
     
     robot_description_config = xacro.process_file(robot_description_file)
