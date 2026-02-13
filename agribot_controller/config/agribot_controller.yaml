@@ -28,7 +28,7 @@ diff_drive_controller:
 
     # MUST match your real robot later. For now, use your xacro properties if you want.
     wheel_separation: 0.51
-    wheel_radius: 0.05
+    wheel_radius: 0.052
 
     cmd_vel_timeout: 0.5
     linear.x.has_velocity_limits: true

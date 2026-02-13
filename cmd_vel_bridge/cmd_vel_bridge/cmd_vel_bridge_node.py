@@ -9,11 +9,9 @@ class CmdVelBridge(Node):
 
         self.declare_parameter("in_topic", "/cmd_vel")
         self.declare_parameter("out_topic", "/diff_drive_controller/cmd_vel")
-        self.declare_parameter("frame_id", "base_link")
 
         in_topic = self.get_parameter("in_topic").value
         out_topic = self.get_parameter("out_topic").value
-        self.frame_id = self.get_parameter("frame_id").value
 
         self.pub = self.create_publisher(TwistStamped, out_topic, 10)
         self.sub = self.create_subscription(Twist, in_topic, self.cb, 10)
@@ -23,7 +21,6 @@ class CmdVelBridge(Node):
     def cb(self, msg: Twist):
         out = TwistStamped()
         out.header.stamp = self.get_clock().now().to_msg()
-        out.header.frame_id = self.frame_id
         out.twist = msg
         self.pub.publish(out)
 
