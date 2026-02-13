@@ -4,6 +4,11 @@
   <!-- Properties -->
   <xacro:include filename="$(find agribot_description)/urdf/properties/agribot.properties.xacro"/>
 
+  <!--Gazebo and ros2 control plugins-->
+  <xacro:include filename="$(find agribot_description)/urdf/control/agribot.ros2control.xacro"/>
+  <xacro:include filename="$(find agribot_description)/urdf/control/agribot.gazebo.xacro"/>
+
+
   <!-- Mech -->
   <xacro:include filename="$(find agribot_description)/urdf/mech/base_mesh.urdf.xacro"/>
   <xacro:include filename="$(find agribot_description)/urdf/mech/wheel_mesh.urdf.xacro"/>

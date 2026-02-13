@@ -6,6 +6,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 import xacro
 from os.path import join
+from launch.actions import ExecuteProcess
+from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument
+
+
 
 def generate_launch_description():
 
@@ -14,7 +19,7 @@ def generate_launch_description():
     bringup_share = get_package_share_directory('agribot_bringup')
 
 
-    robot_description_file = os.path.join(pkg_ros_gz_rbot, 'urdf/urdf', 'agribot.urdf.xacro')
+    robot_description_file = os.path.join(pkg_ros_gz_rbot, 'urdf/robots', 'agribot.urdf.xacro')
     ros_gz_bridge_config = os.path.join(bringup_share, 'config', 'ros_gz_bridge_gazebo.yaml')
     
     robot_description_config = xacro.process_file(robot_description_file)
@@ -59,11 +64,39 @@ def generate_launch_description():
         parameters=[{'config_file': ros_gz_bridge_config}],
         output='screen'
     )
-    
+    spawn_controllers = TimerAction(
+    period=8.0,
+    actions=[
+        ExecuteProcess(
+            cmd=["ros2", "run", "controller_manager", "spawner",
+                 "joint_state_broadcaster", "--controller-manager", "/controller_manager"],
+            output="screen",
+        ),
+        ExecuteProcess(
+            cmd=["ros2", "run", "controller_manager", "spawner",
+                 "diff_drive_controller", "--controller-manager", "/controller_manager"],
+            output="screen",
+        ),
+    ],
+    )
+    cmd_vel_bridge = Node(
+        package="cmd_vel_bridge",
+        executable="cmd_vel_bridge",
+        name="cmd_vel_bridge",
+        output="screen",
+        parameters=[
+            {"in_topic": "/cmd_vel"},
+            {"out_topic": "/diff_drive_controller/cmd_vel"},
+            {"frame_id": "base_link"},
+        ],
+    )
+
 
     return LaunchDescription([
         gazebo,
         spawn_robot,
         ros_gz_bridge,
         robot_state_publisher,
+        spawn_controllers,
+        cmd_vel_bridge,
     ])

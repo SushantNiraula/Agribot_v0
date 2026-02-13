@@ -1,15 +1,16 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <!-- Meshes -->
+  <xacro:property name="pkg_share" value="$(find agribot_description)"/>
+
   <xacro:property name="base_mesh_file"
-    value="package://agribot_description/meshes/agribot_baselink.stl"/>
+    value="file://${pkg_share}/meshes/agribot_baselink.stl"/>
 
   <xacro:property name="left_wheel_mesh_file"
-    value="package://agribot_description/meshes/agribot_left_wheel.stl"/>
+    value="file://${pkg_share}/meshes/agribot_left_wheel.stl"/>
 
   <xacro:property name="right_wheel_mesh_file"
-    value="package://agribot_description/meshes/agribot_right_wheel.stl"/>
+    value="file://${pkg_share}/meshes/agribot_right_wheel.stl"/>
 
   <!-- Wheel joint origins (copied from your URDF) -->
   <xacro:property name="lf_xyz" value="0.35606  0.22973 -0.22532" />

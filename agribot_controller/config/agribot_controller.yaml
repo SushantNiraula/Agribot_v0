@@ -1,0 +1,37 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 50
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+diff_drive_controller:
+  ros__parameters:
+    publish_rate: 50.0
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    enable_odom_tf: true
+    use_stamped_vel: false
+
+    # 6-wheel skid steer: 3 wheels per side
+    left_wheel_names:
+      - left_wheel_front_joint
+      - left_wheel_mid_joint
+      - left_wheel_rear_joint
+    right_wheel_names:
+      - right_wheel_front_joint
+      - right_wheel_mid_joint
+      - right_wheel_rear_joint
+
+    # MUST match your real robot later. For now, use your xacro properties if you want.
+    wheel_separation: 0.51
+    wheel_radius: 0.05
+
+    cmd_vel_timeout: 0.5
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 0.5
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 1.5
