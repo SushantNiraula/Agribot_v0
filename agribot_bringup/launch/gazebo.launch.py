@@ -90,6 +90,14 @@ def generate_launch_description():
         output='screen',
         parameters=[os.path.join(bringup_share, 'config', 'ekf.yaml')],
     )
+    slam_node = Node(
+    package='slam_toolbox',
+    executable='async_slam_toolbox_node',
+    name='slam_toolbox',
+    output='screen',
+    parameters=[os.path.join(bringup_share, 'config', 'slam.yaml')],
+)
+
 
 
     return LaunchDescription([
@@ -100,4 +108,16 @@ def generate_launch_description():
         controllers_after_spawn,
         cmd_vel_bridge,
         ekf_node,
+        slam_node,
+        Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            arguments=[
+                "0", "0", "0",
+                "0", "0", "0",
+                "base_footprint",
+                "agribot/base_footprint/gpu_lidar"
+            ],
+        ),
+        
     ])
