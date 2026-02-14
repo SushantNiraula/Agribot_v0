@@ -8,6 +8,9 @@
   <xacro:include filename="$(find agribot_description)/urdf/control/agribot.ros2control.xacro"/>
   <xacro:include filename="$(find agribot_description)/urdf/control/agribot.gazebo.xacro"/>
 
+  <!--Sensors -->
+  <xacro:include filename="$(find agribot_description)/urdf/sensors/agribot.sensors.xacro"/>
+
 
   <!-- Mech -->
   <xacro:include filename="$(find agribot_description)/urdf/mech/base_mesh.urdf.xacro"/>
@@ -66,5 +69,7 @@
     mass="${wheel_mass}" com="${wheel_com}"
     ixx="${wheel_ixx}" iyy="${wheel_iyy}" izz="${wheel_izz}"
     ixy="${wheel_ixy}" ixz="${wheel_ixz}" iyz="${wheel_iyz}"/>
+
+  <xacro:agribot_sensors/>
 
 </robot>

@@ -83,6 +83,14 @@ def generate_launch_description():
         ],
 
     )
+    ekf_node = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[os.path.join(bringup_share, 'config', 'ekf.yaml')],
+    )
+
 
     return LaunchDescription([
         gazebo,
@@ -91,4 +99,5 @@ def generate_launch_description():
         spawn_robot,
         controllers_after_spawn,
         cmd_vel_bridge,
+        ekf_node,
     ])
