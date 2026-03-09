@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, ExecuteProcess, RegisterEventHandler
+from launch.actions import IncludeLaunchDescription, ExecuteProcess, RegisterEventHandler, TimerAction
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
@@ -97,6 +97,31 @@ def generate_launch_description():
     output='screen',
     parameters=[os.path.join(bringup_share, 'config', 'slam.yaml')],
 )
+    # --- Lifecycle Management for SLAM Toolbox ---
+    
+    configure_slam = ExecuteProcess(
+        cmd=["ros2", "lifecycle", "set", "/slam_toolbox", "configure"],
+        output="screen"
+    )
+
+    activate_slam = ExecuteProcess(
+        cmd=["ros2", "lifecycle", "set", "/slam_toolbox", "activate"],
+        output="screen"
+    )
+
+    # Delay configure to ensure SLAM toolbox is up and listening
+    delay_configure = TimerAction(
+        period=3.0, 
+        actions=[configure_slam]
+    )
+
+    # Run activate immediately after configure finishes
+    activate_after_configure = RegisterEventHandler(
+        OnProcessExit(
+            target_action=configure_slam,
+            on_exit=[activate_slam],
+        )
+    )
 
 
 
@@ -109,15 +134,17 @@ def generate_launch_description():
         cmd_vel_bridge,
         ekf_node,
         slam_node,
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            arguments=[
-                "0", "0", "0",
-                "0", "0", "0",
-                "base_footprint",
-                "agribot/base_footprint/gpu_lidar"
-            ],
-        ),
+        delay_configure, 
+        activate_after_configure, 
+        # Node(
+        #     package="tf2_ros",
+        #     executable="static_transform_publisher",
+        #     arguments=[
+        #         "0", "0", "0",
+        #         "0", "0", "0",
+        #         "base_footprint",
+        #         "agribot/base_footprint/gpu_lidar"
+        #     ],
+        # ),
         
     ])
