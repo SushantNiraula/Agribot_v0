@@ -70,11 +70,5 @@ def generate_launch_description():
             condition = IfCondition(LaunchConfiguration("rviz")),
             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}]
         ),
-        Node(
-        package="foxglove_bridge",
-        executable="foxglove_bridge",
-        output="screen",
-        # Default port is 8765. We'll keep it default for now.
-    )
     ]
     )
