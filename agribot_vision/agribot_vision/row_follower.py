@@ -6,8 +6,6 @@ from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
-
-# ADDED: Import the QoS profile here
 from rclpy.qos import qos_profile_sensor_data 
 
 class CropRowFollower(Node):
@@ -16,7 +14,7 @@ class CropRowFollower(Node):
         
         self.bridge = CvBridge()
         
-        # Subscribe using the Sensor Data QoS profile
+        # Subscriber for Pi Cam (Using Sensor Data QoS for performance)
         self.subscription = self.create_subscription(
             Image,
             '/camera/image_raw', 
@@ -24,59 +22,87 @@ class CropRowFollower(Node):
             qos_profile_sensor_data
         )
             
-        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.get_logger().info("Crop Row Follower Node Started. Waiting for images...")
+        # IMPORTANT: Publish to /cmd_vel_raw so the Lidar Node can intercept/override if needed
+        self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel_raw', 10)
+        
+        # Control Parameters
+        self.target_linear_speed = 0.2  # m/s (Reduced for safety during testing)
+        self.kp = 0.005                 # Proportional gain for steering
+        self.min_area = 2000            # Minimum pixel area to consider a "row"
+
+        self.get_logger().info("Crop Row Follower (Inverted Mount Fix) Started.")
 
     def image_callback(self, msg):
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            # 1. Convert ROS Image to OpenCV
+            raw_frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            
+            # 2. FIX: Rotate 180 degrees because camera is mounted upside down
+            cv_image = cv2.rotate(raw_frame, cv2.ROTATE_180)
+            
         except Exception as e:
-            self.get_logger().error(f"CV Bridge Error: {e}")
+            self.get_logger().error(f"CV Bridge/Rotation Error: {e}")
             return
 
         height, width, _ = cv_image.shape
+        
+        # 3. ROI: Focus on the bottom half of the (now correctly oriented) image
         crop_img = cv_image[int(height/2):height, 0:width]
 
+        # 4. Color Masking (Green Rows)
         hsv = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
-        
-        lower_green = np.array([35, 50, 50])
-        upper_green = np.array([85, 255, 255])
+        lower_green = np.array([35, 40, 40])
+        upper_green = np.array([90, 255, 255])
         mask = cv2.inRange(hsv, lower_green, upper_green)
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        # 5. Contour Detection
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Default state: STOP
         cmd = Twist()
-        cmd.linear.x = 0.0
-        cmd.angular.z = 0.0
 
-        if len(contours) > 0:
+        if contours:
             c = max(contours, key=cv2.contourArea)
             area = cv2.contourArea(c)
             
-            # FIX 1: Only move if the green object is large enough (> 1000 pixels)
-            if area > 2000:
+            if area > self.min_area:
                 M = cv2.moments(c)
                 if M['m00'] > 0:
                     cx = int(M['m10']/M['m00'])
+                    
+                    # Center of image is width/2
+                    # Error > 0 means row is to the RIGHT
+                    # Error < 0 means row is to the LEFT
                     error = cx - (width / 2)
                     
-                    cmd.linear.x = 0.3
+                    cmd.linear.x = self.target_linear_speed
                     
-                    # FIX 2: Flipped the sign on the error to reverse steering direction
-                    cmd.angular.z = float(error * 0.01) 
+                    # STEERING LOGIC: 
+                    # If error is positive (row is right), we need a negative angular.z to turn right.
+                    cmd.angular.z = float(-error * self.kp) 
+                    
+                    # Debugging log (throttle this in production)
+                    # self.get_logger().info(f"Area: {area:.0f} | Error: {error} | Steer: {cmd.angular.z:.2f}")
             else:
-                self.get_logger().info("Green object too small. Stopping.")
+                self.get_logger().info("Target area lost (too small). Stopping.", throttle_duration_sec=2.0)
+                cmd.linear.x = 0.0
+                cmd.angular.z = 0.0
         else:
-            self.get_logger().info("No green detected. Stopping.")
+            self.get_logger().info("No green rows detected. Stopping.", throttle_duration_sec=2.0)
+            cmd.linear.x = 0.0
+            cmd.angular.z = 0.0
                 
         self.cmd_vel_pub.publish(cmd)
+
 def main(args=None):
     rclpy.init(args=args)
     node = CropRowFollower()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

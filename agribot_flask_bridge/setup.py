@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'agribot_vision'
+package_name = 'agribot_flask_bridge'
 
 setup(
     name=package_name,
@@ -24,9 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-		'row_follower = agribot_vision.row_follower:main',
-        'obstacle_avoider = agribot_vision.obstacle_avoider:main',
-
+            'bridge_node = agribot_flask_bridge.bridge_node:main'
         ],
     },
 )
