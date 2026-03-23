@@ -13,7 +13,7 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='sushant',
+    maintainer='agribot',
     maintainer_email='sushantniraula01@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "cmd_vel_bridge = cmd_vel_bridge.cmd_vel_bridge_node:main",
+            'cmd_vel_bridge = cmd_vel_bridge.cmd_vel_bridge:main'
         ],
     },
 )

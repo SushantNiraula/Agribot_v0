@@ -8,6 +8,9 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, LaserScan
 from nav_msgs.msg import Odometry
 
+import base64
+from sensor_msgs.msg import CompressedImage
+
 
 def yaw_from_quat(qx, qy, qz, qw) -> float:
     siny_cosp = 2.0 * (qw * qz + qx * qy)
@@ -53,6 +56,9 @@ class ImuToFlaskBridge(Node):
         self._last_odom = None   # dict
         self._last_lidar = None  # dict
 
+        self._last_image_time = 0.0
+        self.image_rate = 2.0  # 2 FPS (safe)
+
         self.sio = socketio.Client(
             reconnection=True,
             reconnection_attempts=0,
@@ -74,6 +80,13 @@ class ImuToFlaskBridge(Node):
         )
         self.sub_scan = self.create_subscription(
             LaserScan, self.scan_topic, self._on_scan, qos_profile_sensor_data
+        )
+
+        self.sub_image = self.create_subscription(
+            CompressedImage,
+            "/camera/image_raw/compressed",
+            self._on_image,
+            qos_profile_sensor_data
         )
 
         self._last_emit = 0.0
@@ -207,13 +220,41 @@ class ImuToFlaskBridge(Node):
 
         try:
             if self.sio.connected:
-                self.get_logger().info("[DEBUG] Emitting telemetry...")
-                self.get_logger().info(f"[DEBUG DATA] {telemetry}")
+                # self.get_logger().info("[DEBUG] Emitting telemetry...")
+                # self.get_logger().info(f"[DEBUG DATA] {telemetry}")
                 self.sio.emit("telemetry", telemetry)
             else:
                 self._connect_socket()
         except Exception as e:
             self.get_logger().warn(f"Emit failed: {e}")
+    
+
+    def _on_image(self, msg: CompressedImage):
+        now = time.time()
+
+        # Rate limit (VERY IMPORTANT)
+        if now - self._last_image_time < (1.0 / self.image_rate):
+            return
+        self._last_image_time = now
+
+        try:
+            # Convert to base64
+            image_base64 = base64.b64encode(msg.data).decode("utf-8")
+
+            payload = {
+                "robot_id": self.robot_id,
+                "ts": now,
+                "image": image_base64
+            }
+
+            if self.sio.connected:
+                self.sio.emit("camera", payload)
+                self.get_logger().info("[CAM] Frame sent")
+            else:
+                self._connect_socket()
+
+        except Exception as e:
+            self.get_logger().warn(f"Camera emit failed: {e}")
 
 
 def main():

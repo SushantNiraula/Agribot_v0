@@ -63,22 +63,42 @@ def generate_launch_description():
                 'frame_id': 'base_laser'
             }.items()
         ),
-        # 5. Pi Camera V1.3 (Updated with remapping)
+        # # 5. Pi Camera V1.3 (Updated with remapping)
+        # Node(
+        #     package='camera_ros',
+        #     executable='camera_node',
+        #     parameters=[{'width': 640, 'height': 480}],
+        #     remappings=[('/cmd_vel', '/cmd_vel_raw')], # Divert camera output
+        #     output='screen'
+        # ),
+
+        # 5. Pi Camera V1.3 
         Node(
             package='camera_ros',
             executable='camera_node',
-            parameters=[{'width': 640, 'height': 480}],
-            remappings=[('/cmd_vel', '/cmd_vel_raw')], # Divert camera output
+            parameters=[{
+                'width': 640, 
+                'height': 480,
+                'fps': 5.0  # Limit the camera to 5 Frames Per Second!
+            }],
+            # Removed the cmd_vel remapping because the camera doesn't use it
+            output='screen'
+        ),
+        Node(
+            package='crop_row_nav',
+            executable='image_throttler',
+            name='image_throttler',
+            # Removed the cmd_vel remapping because the camera doesn't use it
             output='screen'
         ),
 
-        # 7. Obstacle Avoidance Multiplexer
-        Node(
-            package='agribot_vision', # Assuming you place the script here
-            executable='obstacle_avoider',
-            name='obstacle_avoider',
-            output='screen'
-        ),
+        # # 7. Obstacle Avoidance Multiplexer
+        # Node(
+        #     package='agribot_vision', # Assuming you place the script here
+        #     executable='obstacle_avoider',
+        #     name='obstacle_avoider',
+        #     output='screen'
+        # ),
 
         # 6. Robot State Publisher (URDF)
         IncludeLaunchDescription(
