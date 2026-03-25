@@ -27,8 +27,8 @@ class CropRowNavigator(Node):
         self.debug_pub = self.create_publisher(Image, '/vision/navigation_debug', 1)
 
         # Tuning parameters
-        self.kp = 0.006  # Proportional Gain (How hard to steer). Adjust this later!
-        self.forward_speed = 0.2  # Drive at 0.1 meters per second
+        self.kp = 0.01  # Proportional Gain (How hard to steer). Adjust this later!
+        self.forward_speed = 0.3  # Drive at 0.1 meters per second
         
         self.get_logger().info("Navigator Node started! Waiting for AI masks...")
 

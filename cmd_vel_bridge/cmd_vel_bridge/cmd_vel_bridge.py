@@ -2,12 +2,23 @@ import socketio
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+# from dotenv import load_dotenv
+# import os
+
+# load_dotenv()  # ✅ loads .env file
+
 
 class CmdVelBridge(Node):
     def __init__(self):
         super().__init__("cmd_vel_bridge")
 
-        self.declare_parameter("flask_url", "http://10.43.187.117:5000")
+        # flask_url_env = os.getenv("FLASK_URL")
+
+        # if not flask_url_env:
+        #     self.get_logger().error("FLASK_URL not set in environment!")
+        #     raise RuntimeError("Missing FLASK_URL")
+
+        self.declare_parameter("flask_url", "http://10.63.158.117:5000")
         self.declare_parameter("robot_id", "agribot-01")
         self.declare_parameter("cmd_topic", "/cmd_vel")
 
