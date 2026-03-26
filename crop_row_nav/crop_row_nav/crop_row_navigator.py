@@ -15,7 +15,7 @@ class CropRowNavigator(Node):
         self.bridge = CvBridge()
         
         # Navigation state
-        self.autonomous_mode = False  # Start in manual mode
+        self.autonomous_mode = True  # Start in manual mode
         self.emergency_stop = False
         self.current_command = Twist()  # Store current manual command
         
@@ -57,8 +57,8 @@ class CropRowNavigator(Node):
         self.debug_pub = self.create_publisher(Image, '/vision/navigation_debug', 1)
         
         # Tuning parameters
-        self.kp = 0.01  # Proportional Gain
-        self.forward_speed = 0.3  # Drive at 0.3 meters per second
+        self.kp = 0.05  # Proportional Gain
+        self.forward_speed = 0.4  # Drive at 0.3 meters per second
         
         # Timer for status updates (every 1 second)
         self.status_timer = self.create_timer(1.0, self.publish_status)
