@@ -13,6 +13,11 @@ class CropRowNavigator(Node):
         
         self.bridge = CvBridge()
         
+        # Navigation state
+        self.autonomous_mode = False  # Start in manual mode
+        self.emergency_stop = False
+        self.current_command = Twist()  # Store current manual command
+        
         # 1. Subscribe to the AI's mask
         self.subscription = self.create_subscription(
             Image,
@@ -27,11 +32,61 @@ class CropRowNavigator(Node):
         self.debug_pub = self.create_publisher(Image, '/vision/navigation_debug', 1)
 
         # Tuning parameters
-        self.kp = 0.006  # Proportional Gain (How hard to steer). Adjust this later!
-        self.forward_speed = 0.2  # Drive at 0.1 meters per second
+        self.kp = 0.01  # Proportional Gain
+        self.forward_speed = 0.3  # Drive at 0.3 meters per second
         
-        self.get_logger().info("Navigator Node started! Waiting for AI masks...")
-
+        # Timer for status updates (every 1 second)
+        self.status_timer = self.create_timer(1.0, self.publish_status)
+        
+        self.get_logger().info("Navigator Node started! Waiting for commands...")
+        self.get_logger().info("Mode: MANUAL (waiting for start command)")
+    
+    def mode_callback(self, msg):
+        """Handle mode switching commands from Flutter"""
+        command = msg.data.lower()
+        
+        if command == "auto" or command == "autonomous":
+            if not self.emergency_stop:
+                self.autonomous_mode = True
+                self.get_logger().info("=== Switching to AUTONOMOUS mode ===")
+                self.publish_status()
+            else:
+                self.get_logger().warn("Cannot switch to autonomous mode - Emergency stop active!")
+                
+        elif command == "manual":
+            self.autonomous_mode = False
+            # Stop robot when switching to manual
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+            self.get_logger().info("=== Switching to MANUAL mode ===")
+            self.publish_status()
+            
+        elif command == "stop":
+            self.autonomous_mode = False
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+            self.get_logger().info("Stop command received")
+            
+    def emergency_callback(self, msg):
+        """Handle emergency stop"""
+        self.emergency_stop = msg.data
+        
+        if self.emergency_stop:
+            self.autonomous_mode = False
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+            self.get_logger().warn("!!! EMERGENCY STOP ACTIVATED !!!")
+        else:
+            self.get_logger().info("Emergency stop released")
+            
+        self.publish_status()
+    
+    def manual_cmd_callback(self, msg):
+        """Store manual commands from Flutter"""
+        self.current_command = msg
+        if not self.autonomous_mode and not self.emergency_stop:
+            self.cmd_pub.publish(msg)
+    
     def mask_callback(self, msg):
         try:
             # Convert ROS Image to OpenCV (mono8 means black and white)
