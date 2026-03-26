@@ -11,6 +11,10 @@ from nav_msgs.msg import Odometry
 import base64
 from sensor_msgs.msg import CompressedImage
 
+# from dotenv import load_dotenv
+# import os
+
+# load_dotenv()  # ✅ loads .env file
 
 def yaw_from_quat(qx, qy, qz, qw) -> float:
     siny_cosp = 2.0 * (qw * qz + qx * qy)
@@ -39,7 +43,8 @@ class ImuToFlaskBridge(Node):
     def __init__(self):
         super().__init__("imu_to_flask_bridge")
 
-        self.declare_parameter("flask_url", "http://10.43.187.117:5000")
+
+        self.declare_parameter("flask_url", "http://10.63.158.117:5000")
         self.declare_parameter("imu_topic", "/imu/data_raw")
         self.declare_parameter("odom_topic", "/odometry/filtered")
         self.declare_parameter("scan_topic", "/scan")
@@ -57,7 +62,7 @@ class ImuToFlaskBridge(Node):
         self._last_lidar = None  # dict
 
         self._last_image_time = 0.0
-        self.image_rate = 2.0  # 2 FPS (safe)
+        self.image_rate = 5.0  # 2 FPS (safe)
 
         self.sio = socketio.Client(
             reconnection=True,
@@ -84,7 +89,7 @@ class ImuToFlaskBridge(Node):
 
         self.sub_image = self.create_subscription(
             CompressedImage,
-            "/camera/image_raw/compressed",
+            "/vision/image_throttled/compressed",
             self._on_image,
             qos_profile_sensor_data
         )
