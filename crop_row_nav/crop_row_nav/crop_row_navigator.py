@@ -15,7 +15,7 @@ class CropRowNavigator(Node):
         self.bridge = CvBridge()
         
         # Navigation state
-        self.autonomous_mode = True  # Start in manual mode
+        self.autonomous_mode = True  # Start in autonomous mode
         self.emergency_stop = False
         self.current_command = Twist()  # Store current manual command
         

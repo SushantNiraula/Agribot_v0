@@ -24,6 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'arm_controller = arm_control.arm_controller:main',
+            'arm_teleop = arm_control.arm_teleop:main',
         ],
     },
 )

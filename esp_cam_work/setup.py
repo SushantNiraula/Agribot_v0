@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'esp32_cam_node = esp_cam_work.esp32_cam_node:main',
         ],
     },
 )
