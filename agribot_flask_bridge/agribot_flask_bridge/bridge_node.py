@@ -50,7 +50,7 @@ class ImuToFlaskBridge(Node):
         self.declare_parameter("scan_topic", "/scan")
         self.declare_parameter("emit_rate_hz", 10.0)
         self.declare_parameter("robot_id", "agribot-01")
-        self.declare_parameter("esp32_cam_topic", "/esp32cam/image_raw/compressed")
+        self.declare_parameter("esp32_cam_topic", "/esp32cam/image_raw")
 
         self.flask_url = str(self.get_parameter("flask_url").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)

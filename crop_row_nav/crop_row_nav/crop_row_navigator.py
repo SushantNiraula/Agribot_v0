@@ -36,7 +36,7 @@ class CropRowNavigator(Node):
         # --- Configurable Parameters ---
         self.forward_speed = 0.1   # m/s
         self.kp = 0.02             # Steering sensitivity
-        self.drive_out_dist = 0.3  # Meters to clear row before turning
+        self.drive_out_dist = 1.5  # Meters to clear row before turning
         self.turn_speed = 0.7      # Rad/s for U-turn
 
         # --- Subscriptions ---
@@ -83,7 +83,7 @@ class CropRowNavigator(Node):
             y_coord = int(H * level)
             row_slice = mask[y_coord, :]
             
-            # FIX: Require at least 10 white pixels (255 * 10 = 2550) to ignore tiny noise
+            # Require at least 10 white pixels (255 * 10 = 2550) to ignore tiny noise
             if np.sum(row_slice) > 2550: 
                 x_coord = int(np.mean(np.where(row_slice > 0)))
                 return (x_coord, y_coord), "FOUND"
@@ -97,9 +97,10 @@ class CropRowNavigator(Node):
         # 2. Relaxed Safety: Stop if AI hasn't updated in 10 seconds (Laptop lag/WiFi spike)
         if (time.time() - self.last_ai_update) > 10.0:
             self.cmd_pub.publish(Twist())
-            # Use modulo math to only print this warning once every 5 seconds so it doesn't spam
-            if int(time.time()) % 5 == 0:
-                self.get_logger().warn("AI Feed Delayed! Standing by...")
+            self.get_logger().warn(
+                "AI Feed Delayed! Standing by...", 
+                throttle_duration_sec=5.0
+            )
             return
 
         twist = Twist()
@@ -156,21 +157,26 @@ class CropRowNavigator(Node):
 
         # Build color overlay
         debug_img = self.latest_ai_frame.copy()
-        green_overlay = np.zeros_like(debug_img)
-        green_overlay[:] = (0, 255, 0)
+        red_overlay = np.zeros_like(debug_img)
+        
+        # BGR Format: (Blue, Green, Red) -> (0, 0, 255) makes it Red
+        red_overlay[:] = (0, 0, 255) 
         
         # Apply mask as 40% transparency
         mask_bool = mask_vis > 0
-        debug_img[mask_bool] = cv2.addWeighted(debug_img, 0.6, green_overlay, 0.4, 0)[mask_bool]
+        blended = cv2.addWeighted(debug_img, 0.6, red_overlay, 0.4, 0)
+        debug_img[mask_bool] = blended[mask_bool]
 
         # Draw UI
         status_color = (0, 255, 0) if self.current_state == "NAVIGATING" else (0, 165, 255)
-        cv2.putText(debug_img, f"STATE: {self.current_state}", (10, 30), 2, 0.7, status_color, 2)
+        cv2.putText(debug_img, f"STATE: {self.current_state}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
         
         if anchor:
             # Scale anchor for visualization if mask was resized
             v_anchor = (int(anchor[0] * (f_w/m_w)), int(anchor[1] * (f_h/m_h)))
-            cv2.circle(debug_img, v_anchor, 10, (0, 0, 255), -1)
+            
+            # Changed the dot to Yellow (0, 255, 255) so it contrasts against the red row
+            cv2.circle(debug_img, v_anchor, 10, (0, 255, 255), -1) 
             cv2.line(debug_img, (f_w//2, f_h), v_anchor, (255, 0, 0), 3)
 
         self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug_img, encoding='bgr8'))
