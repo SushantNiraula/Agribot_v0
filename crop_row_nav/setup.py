@@ -27,8 +27,7 @@ setup(
             'crop_row_detector = crop_row_nav.crop_row_detector:main',
             'crop_row_navigator = crop_row_nav.crop_row_navigator:main',
             'image_throttler = crop_row_nav.image_throttler:main',
-            
-            
+            'green_follower = crop_row_nav.green_follower:main', # <-- FIXED TYPO HERE
         ],
     },
 )

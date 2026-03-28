@@ -1,39 +1,133 @@
+### ekf.yaml
+# robot_localization EKF configuration for AgriBot
+#
+# Sensor topology:
+#   /wheel/odometry  (nav_msgs/Odometry)   — tick_to_odom node
+#   /imu/data        (sensor_msgs/Imu)     — imu_filter_madgwick node
+#
+# The EKF publishes /odometry/filtered, which agribot.launch.py
+# remaps to /odom for the navigation stack.
+#
+# State vector order (15 elements):
+#   [X, Y, Z, Roll, Pitch, Yaw, Vx, Vy, Vz, Vroll, Vpitch, Vyaw, Ax, Ay, Az]
+
 ekf_filter_node:
   ros__parameters:
 
-    use_sim_time: true
-    frequency: 50.0
-    sensor_timeout: 0.1
-    two_d_mode: true
+    use_sim_time: false           # MUST be false on real hardware
+    frequency: 30.0               # Hz — match your fastest sensor (IMU @ ~100 Hz is fine, EKF at 30)
+    sensor_timeout: 0.1           # seconds before a sensor is considered stale
+    two_d_mode: true              # Constrains Z, Roll, Pitch to zero (ground robot)
 
-    publish_tf: true
+    publish_tf: true              # EKF owns the odom → base_link TF
+    print_diagnostics: true       # Helpful during bring-up; set false in production
 
-    map_frame: map
-    odom_frame: odom
-    base_link_frame: base_footprint
-    world_frame: odom
-    imu0_frame: imu_link
+    map_frame:       map
+    odom_frame:      odom
+    base_link_frame: base_link
+    world_frame:     odom         # Use "odom" for local-only fusion (no GPS)
 
+    # ------------------------------------------------------------------ #
+    #  Sensor 0: Wheel Odometry                                           #
+    #  Topic:  /wheel/odometry  (nav_msgs/Odometry)                      #
+    #                                                                     #
+    #  We trust Vx (forward speed) and Vyaw (turn rate) from the wheels. #
+    #  We do NOT fuse absolute X/Y pose — the EKF integrates that itself. #
+    # ------------------------------------------------------------------ #
+    odom0: /wheel/odometry
 
-    # Wheel odometry
-    odom0: /diff_drive_controller/odom
-    odom0_config: [true,  true,  false,
+    #                X       Y       Z
+    #             Roll   Pitch     Yaw
+    #               Vx      Vy      Vz
+    #            Vroll  Vpitch    Vyaw
+    #               Ax      Ay      Az
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
                    false, false, true,
-                   false, false, false,
-                   false, false, false,
                    false, false, false]
 
-    odom0_differential: false
-    odom0_relative: false
+    odom0_differential: false     # Ticks already give absolute deltas — no diff needed
+    odom0_relative:     false
+    odom0_queue_size:   10
 
-    # IMU
-    imu0: /imu
+    # Process-noise tuning for odometry (higher = trust sensor less, smoother but laggier)
+    # Start here and tune if the robot drifts or oscillates.
+    odom0_pose_rejection_threshold:  5.0
+    odom0_twist_rejection_threshold: 5.0
+
+    # ------------------------------------------------------------------ #
+    #  Sensor 1: IMU (Madgwick-filtered)                                  #
+    #  Topic:  /imu/data  (sensor_msgs/Imu)                              #
+    #                                                                     #
+    #  Fuse only Vyaw (gyro yaw rate). Absolute yaw from a low-cost IMU  #
+    #  drifts badly — keep it off. Ax/Ay are noisy and can hurt more     #
+    #  than they help on a slow agricultural robot.                       #
+    # ------------------------------------------------------------------ #
+    imu0: /imu/data
+
+    #                X       Y       Z
+    #             Roll   Pitch     Yaw    ← absolute orientation OFF
+    #               Vx      Vy      Vz
+    #            Vroll  Vpitch    Vyaw   ← gyro yaw-rate ON
+    #               Ax      Ay      Az
     imu0_config: [false, false, false,
-                  true,  true,  true,
                   false, false, false,
-                  true,  true,  true,
+                  false, false, false,
+                  false, false, true,
                   false, false, false]
 
     imu0_differential: false
-    imu0_relative: false
+    imu0_relative:     false      # false = use absolute orientation if ever enabled above
     imu0_remove_gravitational_acceleration: true
+    imu0_queue_size: 10
+
+    imu0_pose_rejection_threshold:   5.0
+    imu0_twist_rejection_threshold:  5.0
+    imu0_linear_acceleration_rejection_threshold: 5.0
+
+    # ------------------------------------------------------------------ #
+    #  Process Noise Covariance  (Q matrix)                               #
+    #  Diagonal entries only matter. Increase a value → EKF trusts its   #
+    #  own prediction less for that state → faster to react to sensors.   #
+    #  Order: X Y Z Roll Pitch Yaw  Vx Vy Vz Vroll Vpitch Vyaw  Ax Ay Az #
+    # ------------------------------------------------------------------ #
+    process_noise_covariance: [
+      0.05,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.05,   0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.06,   0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.03,   0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.03,   0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.06,   0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.025,   0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.025,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.04,   0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.01,   0.0,    0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.01,   0.0,    0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.02,   0.0,    0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.01,   0.0,    0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.01,   0.0,
+      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,     0.0,     0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.015
+    ]
+
+    # ------------------------------------------------------------------ #
+    #  Initial Estimate Covariance  (P0 matrix)                           #
+    #  Large diagonal = "I don't know where I am yet" — EKF corrects fast #
+    # ------------------------------------------------------------------ #
+    initial_estimate_covariance: [
+      1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  1.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5,  0.0,
+      0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.5
+    ]

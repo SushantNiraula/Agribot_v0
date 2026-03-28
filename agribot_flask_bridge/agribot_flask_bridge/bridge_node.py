@@ -50,11 +50,13 @@ class ImuToFlaskBridge(Node):
         self.declare_parameter("scan_topic", "/scan")
         self.declare_parameter("emit_rate_hz", 10.0)
         self.declare_parameter("robot_id", "agribot-01")
+        self.declare_parameter("esp32_cam_topic", "/esp32cam/image_raw/compressed")
 
         self.flask_url = str(self.get_parameter("flask_url").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)
         self.odom_topic = str(self.get_parameter("odom_topic").value)
         self.scan_topic = str(self.get_parameter("scan_topic").value)
+        self.esp32_cam_topic = str(self.get_parameter("esp32_cam_topic").value)
         self.emit_rate = float(self.get_parameter("emit_rate_hz").value)
         self.robot_id = str(self.get_parameter("robot_id").value)
 
@@ -104,6 +106,13 @@ class ImuToFlaskBridge(Node):
             CompressedImage,
             "/vision/image_throttled/compressed",
             self._on_image,
+            qos_profile_sensor_data
+        )
+
+        self.sub_esp32_image = self.create_subscription(
+            CompressedImage,
+            self.esp32_cam_topic,
+            self._on_esp32_image,
             qos_profile_sensor_data
         )
 
@@ -329,12 +338,38 @@ class ImuToFlaskBridge(Node):
 
             if self.sio.connected:
                 self.sio.emit("camera", payload)
-                # self.get_logger().info("[CAM] Frame sent")
+                self.get_logger().info("[CAM] Frame sent")
             else:
                 self._connect_socket()
 
         except Exception as e:
             self.get_logger().warn(f"Camera emit failed: {e}")
+    
+    def _on_esp32_image(self, msg: CompressedImage):
+        now = time.time()
+
+        # Rate limit (shared or separate)
+        if now - self._last_image_time < (1.0 / self.image_rate):
+            return
+        self._last_image_time = now
+
+        try:
+            image_base64 = base64.b64encode(msg.data).decode("utf-8")
+
+            payload = {
+                "robot_id": self.robot_id,
+                "ts": now,
+                "image": image_base64,
+                "source": "esp32cam"   # 🔥 IMPORTANT (distinguish source)
+            }
+
+            if self.sio.connected:
+                self.sio.emit("espcamera", payload)
+            else:
+                self._connect_socket()
+
+        except Exception as e:
+            self.get_logger().warn(f"ESP32 Camera emit failed: {e}")
 
 
 def main():
