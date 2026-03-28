@@ -5,7 +5,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 
-from sensor_msgs.msg import Imu, LaserScan
+from sensor_msgs.msg import Imu, LaserScan, JointState
 from nav_msgs.msg import Odometry
 
 import base64
@@ -64,6 +64,15 @@ class ImuToFlaskBridge(Node):
         self._last_image_time = 0.0
         self.image_rate = 5.0  # 2 FPS (safe)
 
+        self.declare_parameter("arm_topic", "/arm/joint_commands")
+        self.arm_topic = self.get_parameter("arm_topic").value
+
+        self.publisher_ = self.create_publisher(
+            JointState,
+            self.arm_topic,
+            10
+        )
+
         self.sio = socketio.Client(
             reconnection=True,
             reconnection_attempts=0,
@@ -75,6 +84,10 @@ class ImuToFlaskBridge(Node):
 
         self.sio.on("connect", self._on_connect)
         self.sio.on("disconnect", self._on_disconnect)
+
+                # 🔥 Listen for ARM command
+        self.sio.on("arm_command", self.on_arm_command)
+
         self._connect_socket()
 
         self.sub_imu = self.create_subscription(
@@ -96,6 +109,7 @@ class ImuToFlaskBridge(Node):
 
         self._last_emit = 0.0
 
+
         self.get_logger().info(
             f"IMU: {self.imu_topic} | ODOM: {self.odom_topic} | SCAN: {self.scan_topic} "
             f"| sending to {self.flask_url} @ {self.emit_rate} Hz"
@@ -114,6 +128,67 @@ class ImuToFlaskBridge(Node):
 
     def _on_disconnect(self):
         self.get_logger().warn("SocketIO disconnected.")
+
+
+    # ---------- ARM CONTROL------------
+    # ---------- ARM CONTROL------------
+    def on_arm_command(self, data):
+        """
+        Supports BOTH formats:
+
+        1. Single:
+        { "motor": "A", "angle": 120 }
+
+        2. Multiple:
+        { "commands": [{ "motor": "A", "angle": 120 }] }
+        """
+
+        try:
+            if data.get("robot_id") != self.robot_id:
+                return
+
+            def clamp(angle):
+                return max(0.0, min(180.0, float(angle)))
+
+            commands = []
+
+            # 🔹 CASE 1: Single joint
+            if "motor" in data and "angle" in data:
+                commands.append({
+                    "motor": data["motor"],
+                    "angle": clamp(data["angle"])
+                })
+
+            # 🔹 CASE 2: Multiple joints
+            elif "commands" in data:
+                for cmd in data["commands"]:
+                    if "motor" in cmd and "angle" in cmd:
+                        commands.append({
+                            "motor": cmd["motor"],
+                            "angle": clamp(cmd["angle"])
+                        })
+
+            if not commands:
+                self.get_logger().warn("No valid arm commands received")
+                return
+
+            # 🔥 Publish to ROS2
+            for cmd in commands:
+                msg = JointState()
+                msg.name = [cmd["motor"]]
+                msg.position = [cmd["angle"]]
+
+                # Optional but good practice
+                msg.header.stamp = self.get_clock().now().to_msg()
+
+                self.publisher_.publish(msg)
+
+                self.get_logger().info(
+                    f"[ARM] {cmd['motor']} → {cmd['angle']}°"
+                )
+
+        except Exception as e:
+            self.get_logger().error(f"Failed to process arm command: {e}")
 
     # ---------------- ODOM ----------------
     def _on_odom(self, msg: Odometry):
@@ -254,7 +329,7 @@ class ImuToFlaskBridge(Node):
 
             if self.sio.connected:
                 self.sio.emit("camera", payload)
-                self.get_logger().info("[CAM] Frame sent")
+                # self.get_logger().info("[CAM] Frame sent")
             else:
                 self._connect_socket()
 
