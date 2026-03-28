@@ -10,6 +10,8 @@ from nav_msgs.msg import Odometry
 
 import base64
 from sensor_msgs.msg import CompressedImage
+from std_msgs.msg import String, Bool
+from geometry_msgs.msg import Twist
 
 # from dotenv import load_dotenv
 # import os
@@ -50,13 +52,15 @@ class ImuToFlaskBridge(Node):
         self.declare_parameter("scan_topic", "/scan")
         self.declare_parameter("emit_rate_hz", 10.0)
         self.declare_parameter("robot_id", "agribot-01")
-        self.declare_parameter("esp32_cam_topic", "/esp32cam/image_raw")
+        self.declare_parameter("esp32_cam_topic", "/esp32cam/custom_compressed")
+        self.declare_parameter("cmd_topic", "/cmd_vel")
 
         self.flask_url = str(self.get_parameter("flask_url").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)
         self.odom_topic = str(self.get_parameter("odom_topic").value)
         self.scan_topic = str(self.get_parameter("scan_topic").value)
         self.esp32_cam_topic = str(self.get_parameter("esp32_cam_topic").value)
+        self.cmd_topic = str(self.get_parameter("cmd_topic").value)
         self.emit_rate = float(self.get_parameter("emit_rate_hz").value)
         self.robot_id = str(self.get_parameter("robot_id").value)
 
@@ -74,6 +78,9 @@ class ImuToFlaskBridge(Node):
             self.arm_topic,
             10
         )
+        self.mode_pub = self.create_publisher(String, "/control/mode",  10)
+        self.emergency_pub = self.create_publisher(Bool, "/control/emergency_stop", 10)
+        self.pub = self.create_publisher(Twist, self.cmd_topic, 10)
 
         self.sio = socketio.Client(
             reconnection=True,
@@ -89,6 +96,9 @@ class ImuToFlaskBridge(Node):
 
                 # 🔥 Listen for ARM command
         self.sio.on("arm_command", self.on_arm_command)
+        self.sio.on("control_mode", self.on_mode)
+        self.sio.on("emergency_stop", self.on_emergency)
+        self.sio.on("cmd_vel", self._on_cmd_vel)
 
         self._connect_socket()
 
@@ -137,9 +147,46 @@ class ImuToFlaskBridge(Node):
 
     def _on_disconnect(self):
         self.get_logger().warn("SocketIO disconnected.")
+    
+    def _on_cmd_vel(self, data):
+        try:
+            if not isinstance(data, dict):
+                return
+            if str(data.get("robot_id")) != self.robot_id:
+                return  # ignore other robots
+
+            cmd = data.get("cmd_vel") or {}
+            vx = float(cmd.get("vx", 0.0))
+            vy = float(cmd.get("vy", 0.0))
+            wz = float(cmd.get("wz", 0.0))
+
+            msg = Twist()
+            msg.linear.x = vx
+            msg.linear.y = vy
+            msg.angular.z = wz
+
+            # self.pub.publish(msg)
+        except Exception as e:
+            self.get_logger().warn(f"cmd_vel publish failed: {e}")
 
 
-    # ---------- ARM CONTROL------------
+# -------------------Control bridge---------------
+    def on_mode(self, data):
+        if data.get("robot_id") != self.robot_id:
+            return
+        msg = String()
+        msg.data = data.get("mode", "manual")
+        self.mode_pub.publish(msg)
+        self.get_logger().info(f"Mode changed to {msg.data}")
+    
+    def on_emergency(self, data):
+        if data.get("robot_id") != self.robot_id:
+            return
+        msg = Bool()
+        msg.data = bool(data.get("stop", False))
+        self.emergency_pub.publish(msg)
+        self.get_logger().warn(f"Emergency: {msg.data}")
+
     # ---------- ARM CONTROL------------
     def on_arm_command(self, data):
         """
@@ -338,7 +385,7 @@ class ImuToFlaskBridge(Node):
 
             if self.sio.connected:
                 self.sio.emit("camera", payload)
-                self.get_logger().info("[CAM] Frame sent")
+                # self.get_logger().info("[CAM] Frame sent")
             else:
                 self._connect_socket()
 
@@ -365,6 +412,7 @@ class ImuToFlaskBridge(Node):
 
             if self.sio.connected:
                 self.sio.emit("espcamera", payload)
+                self.get_logger().info("[ESPCAM] Frame sent")
             else:
                 self._connect_socket()
 

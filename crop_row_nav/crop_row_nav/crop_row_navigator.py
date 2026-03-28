@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.action import ActionClient
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from std_msgs.msg import String, Bool
 from nav_msgs.msg import Odometry
 from cv_bridge import CvBridge
+from agribot_interfaces.action import CropInspection  # Import your custom Action
 import cv2
 import numpy as np
 import math
@@ -17,92 +19,170 @@ class CropRowNavigator(Node):
         self.bridge = CvBridge()
 
         # --- State Machine ---
-        self.current_state = "NAVIGATING" # NAVIGATING, EOL_DRIVE_OUT, EOL_TURN
+        # Added INSPECTING state to pause wheels while the arm moves
+        self.current_state = "NAVIGATING" 
         self.autonomous_mode = True
-        self.emergency_stop = False
         self.has_locked_on_row = False
 
         # --- Data Buffers ---
         self.latest_mask = None
         self.latest_ai_frame = None
+        
+        # Odometry trackers
         self.current_yaw = 0.0
-        self.start_x = 0.0
-        self.start_y = 0.0
         self.current_x = 0.0
         self.current_y = 0.0
+        self.start_x = 0.0
+        self.start_y = 0.0
         self.start_yaw = 0.0
+        
+        # Inspection tracking
+        self.last_inspect_x = None
+        self.last_inspect_y = None
         self.last_ai_update = time.time()
 
         # --- Configurable Parameters ---
-        self.forward_speed = 0.1   # m/s
-        self.kp = 0.02             # Steering sensitivity
-        self.drive_out_dist = 1.5  # Meters to clear row before turning
-        self.turn_speed = 0.7      # Rad/s for U-turn
+        self.forward_speed = 0.1     # m/s
+        self.kp = 0.02               # Steering sensitivity
+        self.drive_out_dist = 1.5    # Meters to clear row before turning
+        self.turn_speed = 0.7        # Rad/s for U-turn
+        self.inspection_interval = 0.5 # Meters to travel between arm inspections
 
-        # --- Subscriptions ---
+        # --- ROS 2 Interfaces ---
         self.sub_ai_frame = self.create_subscription(Image, '/vision/ai_input_debug', self.ai_frame_callback, 1)
         self.sub_mask = self.create_subscription(Image, '/vision/crop_mask', self.mask_callback, 1)
-        self.sub_odom = self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.sub_odom = self.create_subscription(Odometry, '/wheel/odometry', self.odom_callback, 10)
         self.sub_mode = self.create_subscription(String, '/control/mode', self.mode_callback, 1)
 
-        # --- Publishers ---
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.debug_pub = self.create_publisher(Image, '/vision/navigation_debug', 1)
+        
+        # Action Client for the Arm
+        self.arm_client = ActionClient(self, CropInspection, '/arm/inspect_crop')
 
-        # --- 10Hz Timer (The "Brain" that keeps moving even if AI is slow) ---
+        # Control Loop
         self.timer = self.create_timer(0.1, self.control_loop)
-        self.get_logger().info("Final Crop Navigator Online. Waiting for AI Mask from Laptop...")
+        self.get_logger().info("Integrated Navigator Online. Waiting for AI Mask...")
 
     def odom_callback(self, msg):
         self.current_x = msg.pose.pose.position.x
         self.current_y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
-        self.current_yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
+        
+        # Orientation math (Quaternion to Euler Yaw)
+        siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+        self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
+        
+        # Initialize the inspection tracker on the very first odom message
+        if self.last_inspect_x is None:
+            self.last_inspect_x = self.current_x
+            self.last_inspect_y = self.current_y
 
     def ai_frame_callback(self, msg):
         self.latest_ai_frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
     def mask_callback(self, msg):
         self.latest_mask = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
-        self.last_ai_update = time.time() # Reset the timeout clock
+        self.last_ai_update = time.time() 
 
     def mode_callback(self, msg):
         if msg.data.lower() in ["manual", "stop"]:
             self.autonomous_mode = False
-            self.cmd_pub.publish(Twist())
+            self.cmd_pub.publish(Twist()) # Force stop
             self.get_logger().info("Switched to MANUAL mode.")
         else:
             self.autonomous_mode = True
             self.get_logger().info("Switched to AUTO mode.")
 
     def scan_for_anchor(self, mask):
-        """Reference Paper Algorithm: Scans bottom-up for the row start"""
         H, W = mask.shape
-        # Check 4 horizontal slices
         for level in [0.8, 0.6, 0.4, 0.2]:
             y_coord = int(H * level)
             row_slice = mask[y_coord, :]
             
-            # Require at least 10 white pixels (255 * 10 = 2550) to ignore tiny noise
             if np.sum(row_slice) > 2550: 
                 x_coord = int(np.mean(np.where(row_slice > 0)))
                 return (x_coord, y_coord), "FOUND"
         return None, "EOL"
 
-    def control_loop(self):
-        # 1. If not in auto mode, or waiting for the VERY first mask, do nothing
-        if not self.autonomous_mode or self.latest_mask is None:
+    # --- NEW: Action Client Methods ---
+    def trigger_inspection(self):
+        self.get_logger().info(f"Traveled {self.inspection_interval}m. Stopping for inspection...")
+        self.current_state = "INSPECTING"
+        
+        # Immediately publish zero velocity to stop the wheels
+        self.cmd_pub.publish(Twist()) 
+        
+        if not self.arm_client.wait_for_server(timeout_sec=3.0):
+            self.get_logger().error("Arm Action Server not available! Skipping inspection.")
+            self.resume_navigation()
+            return
+            
+        goal_msg = CropInspection.Goal()
+        goal_msg.start = True
+        
+        self.get_logger().info("Sending goal to Arm Controller...")
+        self.send_goal_future = self.arm_client.send_goal_async(
+            goal_msg, 
+            feedback_callback=self.arm_feedback_callback
+        )
+        self.send_goal_future.add_done_callback(self.goal_response_callback)
+
+    def arm_feedback_callback(self, feedback_msg):
+        # Print the live arm feedback directly to the navigator terminal!
+        self.get_logger().info(f"[ARM FEEDBACK]: {feedback_msg.feedback.current_state}")
+
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().warn("Arm rejected the inspection request. Resuming drive.")
+            self.resume_navigation()
+            return
+            
+        self.get_logger().info("Arm accepted goal. Waiting for completion...")
+        self.result_future = goal_handle.get_result_async()
+        self.result_future.add_done_callback(self.get_result_callback)
+
+    def get_result_callback(self, future):
+        result = future.result().result
+        self.get_logger().info(f"Arm Sequence Finished: {result.message}")
+        self.resume_navigation()
+
+    def resume_navigation(self):
+        # Reset the distance tracker to the current position
+        self.last_inspect_x = self.current_x
+        self.last_inspect_y = self.current_y
+        self.current_state = "NAVIGATING"
+        self.get_logger().info("Resuming autonomous navigation down the row.")
+
+def control_loop(self):
+        # 1. Basic Safety Check
+        if not self.autonomous_mode or self.last_inspect_x is None:
             return
 
-        # 2. Relaxed Safety: Stop if AI hasn't updated in 10 seconds (Laptop lag/WiFi spike)
+        # 2. PRIORITY: Inspection Check (Independent of Vision)
+        # We check distance first so the arm triggers even if the AI mask is slow
+        if self.current_state == "NAVIGATING":
+            dist_traveled = math.hypot(self.current_x - self.last_inspect_x, self.current_y - self.last_inspect_y)
+            
+            if dist_traveled >= self.inspection_interval:
+                self.trigger_inspection()
+                return # Exit loop; wheels are stopped, arm is moving
+
+        # 3. Vision Safety Check
+        # If we aren't inspecting, but the AI mask is dead, stop the wheels
         if (time.time() - self.last_ai_update) > 10.0:
             self.cmd_pub.publish(Twist())
-            self.get_logger().warn(
-                "AI Feed Delayed! Standing by...", 
-                throttle_duration_sec=5.0
-            )
+            self.get_logger().warn("AI Mask Feed Delayed! Standing by...", throttle_duration_sec=5.0)
             return
 
+        # 4. State/Mask Guard
+        # Don't run navigation logic if the mask is missing or arm is busy
+        if self.latest_mask is None or self.current_state == "INSPECTING":
+            return
+
+        # --- Begin Navigation Logic ---
         twist = Twist()
         anchor, status = self.scan_for_anchor(self.latest_mask)
         H, W = self.latest_mask.shape
@@ -113,14 +193,14 @@ class CropRowNavigator(Node):
                 self.has_locked_on_row = True
                 error = (W / 2) - anchor[0]
                 twist.linear.x = self.forward_speed
-                # Steer towards the center of the crop row
                 twist.angular.z = float(self.kp * error)
             elif status == "EOL" and self.has_locked_on_row:
                 self.get_logger().info("Row end detected. Driving out...")
                 self.current_state = "EOL_DRIVE_OUT"
                 self.start_x, self.start_y = self.current_x, self.current_y
             else:
-                twist.linear.x = self.forward_speed * 0.5 # Creep forward to find row
+                # Search mode / slow forward
+                twist.linear.x = self.forward_speed * 0.5 
 
         # --- State 2: Drive out of the row ---
         elif self.current_state == "EOL_DRIVE_OUT":
@@ -136,46 +216,43 @@ class CropRowNavigator(Node):
         elif self.current_state == "EOL_TURN":
             diff = abs(math.atan2(math.sin(self.current_yaw - self.start_yaw), 
                                  math.cos(self.current_yaw - self.start_yaw)))
-            if diff < 3.0: # Roughly 172 degrees to prevent overshooting
+            if diff < 3.0: 
                 twist.angular.z = self.turn_speed
             else:
                 self.get_logger().info("Turn finished. Navigating back.")
+                self.last_inspect_x = self.current_x
+                self.last_inspect_y = self.current_y
                 self.current_state = "NAVIGATING"
                 self.has_locked_on_row = False
 
         self.cmd_pub.publish(twist)
         self.publish_debug(anchor)
-
+        
     def publish_debug(self, anchor):
         if self.latest_ai_frame is None or self.latest_mask is None:
             return
 
-        # Sync mask to AI frame size
         m_h, m_w = self.latest_mask.shape
         f_h, f_w = self.latest_ai_frame.shape[:2]
         mask_vis = cv2.resize(self.latest_mask, (f_w, f_h))
 
-        # Build color overlay
         debug_img = self.latest_ai_frame.copy()
         red_overlay = np.zeros_like(debug_img)
-        
-        # BGR Format: (Blue, Green, Red) -> (0, 0, 255) makes it Red
         red_overlay[:] = (0, 0, 255) 
         
-        # Apply mask as 40% transparency
         mask_bool = mask_vis > 0
         blended = cv2.addWeighted(debug_img, 0.6, red_overlay, 0.4, 0)
         debug_img[mask_bool] = blended[mask_bool]
 
-        # Draw UI
         status_color = (0, 255, 0) if self.current_state == "NAVIGATING" else (0, 165, 255)
+        # Highlight INSPECTING state in bright yellow
+        if self.current_state == "INSPECTING":
+            status_color = (0, 255, 255) 
+            
         cv2.putText(debug_img, f"STATE: {self.current_state}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
         
         if anchor:
-            # Scale anchor for visualization if mask was resized
             v_anchor = (int(anchor[0] * (f_w/m_w)), int(anchor[1] * (f_h/m_h)))
-            
-            # Changed the dot to Yellow (0, 255, 255) so it contrasts against the red row
             cv2.circle(debug_img, v_anchor, 10, (0, 255, 255), -1) 
             cv2.line(debug_img, (f_w//2, f_h), v_anchor, (255, 0, 0), 3)
 

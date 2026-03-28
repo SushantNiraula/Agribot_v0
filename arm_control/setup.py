@@ -26,6 +26,8 @@ setup(
         'console_scripts': [
             'arm_controller = arm_control.arm_controller:main',
             'arm_teleop = arm_control.arm_teleop:main',
+            'arm_action_controller = arm_control.arm_action_controller:main',
+            'image_saver = arm_control.image_saver:main',
         ],
     },
 )

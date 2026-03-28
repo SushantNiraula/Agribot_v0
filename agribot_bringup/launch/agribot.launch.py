@@ -198,8 +198,8 @@ def generate_launch_description():
     # ------------------------------------------------------------------ #
     arm_controller_node = Node(
         package='arm_control',
-        executable='arm_controller',
-        name='arm_controller',
+        executable='arm_action_controller',
+        name='arm_action_controller',
         output='screen',
     )
 
