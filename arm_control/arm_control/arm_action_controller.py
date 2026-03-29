@@ -147,7 +147,7 @@ class ArmControllerNode(Node):
     def set_flashlight(self, intensity):
         try:
             url = f"http://{self.esp_ip}/control?var=led_intensity&val={intensity}"
-            urllib.request.urlopen(url, timeout=3)
+            urllib.request.urlopen(url, timeout=10)
         except Exception:
             pass
 
@@ -207,8 +207,13 @@ class ArmControllerNode(Node):
             targets[motor_name] = msg.position[idx]
         self.move_simultaneously(targets, speed_delay=0.01)
 
-    def align_to_target(self, publish_feedback):
-        publish_feedback("Activating 2D Visual Alignment...")
+    # --- UPDATED ALIGNMENT FUNCTION WITH OFFSETS ---
+    def align_to_target(self, publish_feedback, x_offset=0, y_offset=0):
+        """
+        x_offset and y_offset account for the physical distance 
+        between the Camera lens and the Soil Probe tip.
+        """
+        publish_feedback(f"Activating 2D Visual Alignment (Offset: X={x_offset}, Y={y_offset})...")
         self.is_centering = True
         centering_attempts = 0
         
@@ -217,34 +222,38 @@ class ArmControllerNode(Node):
                 centering_attempts += 1
                 time.sleep(0.1)
                 continue
-                
-            error_x = self.current_visual_error_x
-            error_y = self.current_visual_error_y
+            
+            # Apply the offset to the visual error
+            # If the probe is to the right of the camera, we need to 'aim' 
+            # the camera slightly to the left of the plant center.
+            error_x = self.current_visual_error_x + x_offset
+            error_y = self.current_visual_error_y + y_offset
+            
             current_a = self.current_angles['A']
             current_b = self.current_angles['B']
             
-            needs_x_nudge = abs(error_x) > 20
-            needs_y_nudge = abs(error_y) > 20
+            needs_x_nudge = abs(error_x) > 15 # Tightened tolerance to 15px
+            needs_y_nudge = abs(error_y) > 15
             
             if not needs_x_nudge and not needs_y_nudge: 
-                publish_feedback("Target Perfectly Aligned!")
+                publish_feedback("Target Offset Aligned!")
                 break
                 
             if needs_x_nudge:
                 new_a = current_a + 1 if error_x > 0 else current_a - 1
-                self.move_simultaneously({'A': new_a})
+                self.move_simultaneously({'A': new_a}, speed_delay=0.01)
                 
             if needs_y_nudge:
                 new_b = current_b + 1 if error_y > 0 else current_b - 1
-                self.move_simultaneously({'B': new_b})
+                self.move_simultaneously({'B': new_b}, speed_delay=0.01)
                 
             centering_attempts += 1
-            time.sleep(0.1) 
+            time.sleep(0.05) 
             
         self.is_centering = False
-        time.sleep(1.0) 
+        time.sleep(0.5) 
 
-    # --- THE NEW ACTION CALLBACK ---
+    # --- UPDATED EXECUTION CALLBACK ---
     def execute_callback(self, goal_handle):
         self.get_logger().info('Executing goal...')
         feedback_msg = CropInspection.Feedback()
@@ -256,14 +265,17 @@ class ArmControllerNode(Node):
             goal_handle.publish_feedback(feedback_msg)
 
         self.is_inspecting = True 
-        publish_feedback("=== PHASE 1: IMAGE COLLECTION ===")
         
+        # --- PHASE 1: IMAGE COLLECTION ---
+        publish_feedback("=== PHASE 1: IMAGE COLLECTION ===")
         self.set_flashlight(200)
         time.sleep(2.0)
         
         publish_feedback("Moving to Look Position...")
         self.move_simultaneously(self.look_pos, speed_delay=0.015)
-        self.align_to_target(publish_feedback)
+        
+        # For images, we want the camera exactly centered (Offset = 0)
+        self.align_to_target(publish_feedback, x_offset=0, y_offset=0)
             
         publish_feedback("Lowering for Image Capture...")
         img_target = self.current_angles.copy()
@@ -279,10 +291,18 @@ class ArmControllerNode(Node):
         publish_feedback("Returning Home...")
         self.move_simultaneously(self.home_pos)
         
+        # --- PHASE 2: SOIL PROBING ---
         publish_feedback("=== PHASE 2: SOIL PROBING ===")
         publish_feedback("Moving to Look Position...")
         self.move_simultaneously(self.look_pos, speed_delay=0.015)
-        self.align_to_target(publish_feedback)
+        
+        # ADJUST THESE VALUES based on your physical build:
+        # If your probe is to the RIGHT of the camera, use a NEGATIVE x_offset.
+        # If your probe is BEHIND the camera, use a POSITIVE y_offset.
+        PROBE_OFFSET_X = -45  # Example: probe is ~2cm right of camera
+        PROBE_OFFSET_Y = 10   # Example: probe is slightly forward of camera
+        
+        self.align_to_target(publish_feedback, x_offset=PROBE_OFFSET_X, y_offset=PROBE_OFFSET_Y)
         
         publish_feedback("Deploying Soil Probe...")
         deploy_target = self.current_angles.copy() 

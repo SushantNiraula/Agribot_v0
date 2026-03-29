@@ -78,7 +78,7 @@ def generate_launch_description():
         'launch', 'description.launch.py'
     )
     ekf_config = os.path.join(
-        get_package_share_directory('agribot_base'),
+        get_package_share_directory('agribot_bringup'),
         'config', 'ekf.yaml'
     )
 

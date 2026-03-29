@@ -54,6 +54,7 @@ class ImuToFlaskBridge(Node):
         self.declare_parameter("robot_id", "agribot-01")
         self.declare_parameter("esp32_cam_topic", "/esp32cam/custom_compressed")
         self.declare_parameter("cmd_topic", "/cmd_vel")
+        self.declare_parameter("wheel_odom_topic", "/wheel/odometry")
 
         self.flask_url = str(self.get_parameter("flask_url").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)
@@ -61,6 +62,7 @@ class ImuToFlaskBridge(Node):
         self.scan_topic = str(self.get_parameter("scan_topic").value)
         self.esp32_cam_topic = str(self.get_parameter("esp32_cam_topic").value)
         self.cmd_topic = str(self.get_parameter("cmd_topic").value)
+        self.wheel_odom_topic = str(self.get_parameter("wheel_odom_topic").value)
         self.emit_rate = float(self.get_parameter("emit_rate_hz").value)
         self.robot_id = str(self.get_parameter("robot_id").value)
 
@@ -69,6 +71,8 @@ class ImuToFlaskBridge(Node):
 
         self._last_image_time = 0.0
         self.image_rate = 5.0  # 2 FPS (safe)
+
+        self._wheel_odom = None
 
         self.declare_parameter("arm_topic", "/arm/joint_commands")
         self.arm_topic = self.get_parameter("arm_topic").value
@@ -110,6 +114,13 @@ class ImuToFlaskBridge(Node):
         )
         self.sub_scan = self.create_subscription(
             LaserScan, self.scan_topic, self._on_scan, qos_profile_sensor_data
+        )
+
+        self.sub_wheel_odom = self.create_subscription(
+            Odometry,
+            self.wheel_odom_topic,
+            self._on_wheel_odom,
+            qos_profile_sensor_data
         )
 
         self.sub_image = self.create_subscription(
@@ -168,6 +179,25 @@ class ImuToFlaskBridge(Node):
             # self.pub.publish(msg)
         except Exception as e:
             self.get_logger().warn(f"cmd_vel publish failed: {e}")
+    
+    def _on_wheel_odom(self, msg: Odometry):
+        p = msg.pose.pose.position
+        t = msg.twist.twist
+    
+        self._wheel_odom = {
+            "x": float(p.x),
+            "y": float(p.y),
+            "vx": float(t.linear.x),
+            "wz": float(t.angular.z),
+        }
+    
+        # ✅ Log the actual wheel odometry
+        self.get_logger().info(
+            f"[Wheel Odom] x={self._wheel_odom['x']:.3f} m, "
+            f"y={self._wheel_odom['y']:.3f} m, "
+            f"vx={self._wheel_odom['vx']:.3f} m/s, "
+            f"wz={self._wheel_odom['wz']:.3f} rad/s"
+        )
 
 
 # -------------------Control bridge---------------
