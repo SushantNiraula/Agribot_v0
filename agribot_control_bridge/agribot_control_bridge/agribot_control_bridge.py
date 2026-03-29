@@ -27,10 +27,10 @@ class ControlBridge(Node):
         self.mode_pub = self.create_publisher(String, "/control/mode", 10)
         self.emergency_pub = self.create_publisher(Bool, "/control/emergency_stop", 10)
 
-        # 📥 Subscribers
+        # 📥 Subscribers (FIXED: Now subscribes to /arm/status)
         self.create_subscription(
             String,
-            '/arm/inspect_crop/_action/feedback',
+            '/arm/status',
             self.feedback_callback,
             10
         )
@@ -94,22 +94,36 @@ class ControlBridge(Node):
         self.get_logger().info("Inspection STOPPED")
 
     # =========================================
-    # 📢 FEEDBACK CALLBACK
+    # 📢 FEEDBACK CALLBACK (IMPROVED PARSING)
     # =========================================
     def feedback_callback(self, msg):
         try:
             text = msg.data.lower()
 
-            # 🔥 Convert to structured event
             event = "general"
             status = None
 
-            if "dry" in text:
+            # 🌱 Soil states
+            if "soil is dry" in text:
                 event = "soil"
                 status = "dry"
-            elif "wet" in text:
+
+            elif "soil is adequately wet" in text:
                 event = "soil"
                 status = "wet"
+
+            # 📸 Image capture
+            elif "image collection" in text:
+                event = "camera"
+
+            # 🤖 Motion states
+            elif "moving" in text or "deploying" in text or "inserting" in text:
+                event = "motion"
+
+            # 🎉 Completion
+            elif "completed" in text:
+                event = "finished"
+                self.inspection_active = False
 
             payload = {
                 "robot_id": self.robot_id,
@@ -120,7 +134,7 @@ class ControlBridge(Node):
             }
 
             self.sio.emit("arm_feedback", payload)
-            self.get_logger().info("arm_feedback sent")
+            self.get_logger().info(f"Feedback sent → {payload}")
 
         except Exception as e:
             self.get_logger().error(f"Feedback emit error: {e}")
@@ -162,3 +176,6 @@ def main():
     node = ControlBridge()
     rclpy.spin(node)
     rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

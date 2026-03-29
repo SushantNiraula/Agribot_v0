@@ -47,9 +47,8 @@ class ImuToFlaskBridge(Node):
 
 
         self.declare_parameter("flask_url", "http://10.63.158.117:5000")
-        self.declare_parameter("imu_topic", "/imu/data_raw")
-        self.declare_parameter("odom_topic", "/odometry/filtered")
-        self.declare_parameter("scan_topic", "/scan")
+        self.declare_parameter("imu_topic", "/imu/data")
+        self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("emit_rate_hz", 10.0)
         self.declare_parameter("robot_id", "agribot-01")
         self.declare_parameter("esp32_cam_topic", "/esp32cam/custom_compressed")
@@ -59,7 +58,6 @@ class ImuToFlaskBridge(Node):
         self.flask_url = str(self.get_parameter("flask_url").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)
         self.odom_topic = str(self.get_parameter("odom_topic").value)
-        self.scan_topic = str(self.get_parameter("scan_topic").value)
         self.esp32_cam_topic = str(self.get_parameter("esp32_cam_topic").value)
         self.cmd_topic = str(self.get_parameter("cmd_topic").value)
         self.wheel_odom_topic = str(self.get_parameter("wheel_odom_topic").value)
@@ -112,9 +110,6 @@ class ImuToFlaskBridge(Node):
         self.sub_odom = self.create_subscription(
             Odometry, self.odom_topic, self._on_odom, qos_profile_sensor_data
         )
-        self.sub_scan = self.create_subscription(
-            LaserScan, self.scan_topic, self._on_scan, qos_profile_sensor_data
-        )
 
         self.sub_wheel_odom = self.create_subscription(
             Odometry,
@@ -141,7 +136,7 @@ class ImuToFlaskBridge(Node):
 
 
         self.get_logger().info(
-            f"IMU: {self.imu_topic} | ODOM: {self.odom_topic} | SCAN: {self.scan_topic} "
+            f"IMU: {self.imu_topic} | ODOM: {self.odom_topic} "
             f"| sending to {self.flask_url} @ {self.emit_rate} Hz"
         )
 

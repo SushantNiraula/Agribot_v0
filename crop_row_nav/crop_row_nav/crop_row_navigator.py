@@ -20,7 +20,7 @@ class LightweightCropNavigator(Node):
         self.bridge = CvBridge()
 
         # --- State Machine ---
-        self.current_state = "NAVIGATING" # NAVIGATING, EOL_DRIVE_OUT, EOL_TURN, INSPECTING
+        self.current_state = "NAVIGATING" # NAVIGATING, EOL_TURN, INSPECTING
         self.autonomous_mode = True
         self.has_locked_on_row = False
 
@@ -28,11 +28,8 @@ class LightweightCropNavigator(Node):
         self.latest_frame = None
         self.latest_mask = None
         self.current_yaw = 0.0
-        self.start_x = 0.0
-        self.start_y = 0.0
         self.current_x = 0.0
         self.current_y = 0.0
-        self.start_yaw = 0.0
         self.last_frame_update = time.time()
         
         # --- Arm Inspection Trackers ---
@@ -40,23 +37,19 @@ class LightweightCropNavigator(Node):
         self.last_inspect_y = None
 
         # --- Configurable Parameters ---
-        self.forward_speed = 0.1   # m/s
-        self.kp = 0.005            # Steering sensitivity (Tuned down for pixel errors)
-        self.drive_out_dist = 1.5  # Meters to clear row before turning
-        self.turn_speed = 0.7      # Rad/s for U-turn
+        self.forward_speed = 0.1       # m/s
+        self.kp = 0.005                # Steering sensitivity
         self.inspection_interval = 1.5 # Meters between arm inspections
-        
         # EOL Debounce: Require ~3 seconds of pure dirt before turning
         self.eol_counter = 0
         self.eol_frames_required = 30 
         
-        # Vision Parameters
+        # --- CALIBRATED VISION PARAMETERS ---
         self.num_strips = 4
-        self.lower_green = np.array([35, 40, 40])   # Tune these HSV values!
-        self.upper_green = np.array([85, 255, 255]) # Tune these HSV values!
+        self.lower_green = np.array([39, 63, 21])
+        self.upper_green = np.array([119, 255, 255])
 
         # --- Subscriptions ---
-        # Subscribe directly to the raw camera feed instead of an AI mask
         self.sub_camera = self.create_subscription(Image, '/camera/image_raw', self.camera_callback, qos_profile_sensor_data)        
         self.sub_odom = self.create_subscription(Odometry, '/wheel/odometry', self.odom_callback, 10)        
         self.sub_mode = self.create_subscription(String, '/control/mode', self.mode_callback, 1)
@@ -91,9 +84,9 @@ class LightweightCropNavigator(Node):
         
         # --- FLIP THE IMAGE 180 DEGREES ---
         self.latest_frame = cv2.rotate(frame, cv2.ROTATE_180)
-        # ----------------------------------
         
         self.last_frame_update = time.time()
+
     def mode_callback(self, msg):
         if msg.data.lower() in ["manual", "stop"]:
             self.autonomous_mode = False
@@ -145,13 +138,11 @@ class LightweightCropNavigator(Node):
             
             # Predict where the row hits the bottom of the screen
             target_x_bottom = int(poly(height))
-            # Clamp to screen width just in case
             target_x_bottom = max(0, min(width, target_x_bottom))
             
             return (target_x_bottom, height), "FOUND", centroids, poly
             
         elif len(centroids) == 1:
-            # Fallback if only one blob is seen
             return (centroids[0][0], centroids[0][1]), "FOUND", centroids, None
             
         return None, "EOL", [], None
@@ -209,8 +200,6 @@ class LightweightCropNavigator(Node):
                 return
 
         twist = Twist()
-        
-        # --- RUN THE LIGHTWEIGHT CV PIPELINE ---
         anchor, status, centroids, poly = self.process_image(self.latest_frame)
         H, W = self.latest_frame.shape[:2]
 
@@ -218,7 +207,8 @@ class LightweightCropNavigator(Node):
             if status == "FOUND":
                 self.has_locked_on_row = True
                 self.eol_counter = 0 
-                # Error is difference between image center and the target X
+                
+                # Calculate steering error
                 error = (W / 2) - anchor[0]
                 twist.linear.x = self.forward_speed
                 twist.angular.z = float(self.kp * error)
@@ -226,39 +216,32 @@ class LightweightCropNavigator(Node):
             elif status == "EOL" and self.has_locked_on_row:
                 self.eol_counter += 1
                 if self.eol_counter >= self.eol_frames_required:
-                    self.get_logger().info("Row end confirmed. Driving out...")
-                    self.current_state = "EOL_DRIVE_OUT"
-                    self.start_x, self.start_y = self.current_x, self.current_y
+                    self.get_logger().info("Row ended! Spinning to find the next one...")
+                    self.current_state = "EOL_TURN"  # Jump straight to turning
                     self.eol_counter = 0
                 else:
+                    # Coast forward slightly while deciding if it's really the end
                     twist.linear.x = self.forward_speed 
             else:
+                # Lost the row but wasn't locked on yet, move slowly
                 twist.linear.x = self.forward_speed * 0.5 
 
-        elif self.current_state == "EOL_DRIVE_OUT":
-            if status == "FOUND":
-                self.get_logger().info("Row re-acquired! Aborting EOL sequence.")
-                self.current_state = "NAVIGATING"
-                return
-                
-            dist = math.hypot(self.current_x - self.start_x, self.current_y - self.start_y)
-            if dist < self.drive_out_dist:
-                twist.linear.x = self.forward_speed
-            else:
-                self.get_logger().info("Drive out complete. Starting 180 Turn.")
-                self.current_state = "EOL_TURN"
-                self.start_yaw = self.current_yaw
-
         elif self.current_state == "EOL_TURN":
-            diff = abs(math.atan2(math.sin(self.current_yaw - self.start_yaw), math.cos(self.current_yaw - self.start_yaw)))
-            if diff < 3.0: 
-                twist.angular.z = self.turn_speed
-            else:
-                self.get_logger().info("Turn finished. Navigating back.")
+            # Are we looking at a row again?
+            if status == "FOUND":
+                self.get_logger().info("Row found! Resuming navigation.")
+                self.current_state = "NAVIGATING"
                 self.last_inspect_x = self.current_x
                 self.last_inspect_y = self.current_y
-                self.current_state = "NAVIGATING"
-                self.has_locked_on_row = False
+                self.has_locked_on_row = True
+            else:
+                # Spin in place at high speed until the camera sees green crops
+                twist.linear.x = 0.0   # 0.0 means stop moving forward
+                
+                # Turn speed (Increase this if you want it to whip around faster)
+                # Use a POSITIVE number to spin Left. Use NEGATIVE to spin Right.
+                fast_turn_speed = -1.2 
+                twist.angular.z = fast_turn_speed
 
         self.cmd_pub.publish(twist)
         self.publish_debug(anchor, centroids, poly)
