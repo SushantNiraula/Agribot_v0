@@ -231,6 +231,10 @@ Agribot_v0/
 │
 ├── cmd_vel_bridge/
 │
+├── firmware/pico2/        (Pico 2 micro-ROS firmware, see its README)
+│
+├── hardware/arm_pi/       (Raspberry Pi arm scripts, see its README)
+│
 └── ...
 ```
 
@@ -1296,6 +1300,8 @@ same ROS architecture
 Hardware
 ```
 
+Low-level firmware for the drive base is in [`firmware/pico2/`](firmware/pico2/README.md) and the Raspberry Pi arm scripts are in [`hardware/arm_pi/`](hardware/arm_pi/README.md). Copy `.env.example` to `.env` before running the Flask bridge.
+
 The exact hardware configuration is still being refined as the original physical Agribot system is reconstructed into a cleaner and more reproducible software architecture.
 
 ---
@@ -1474,3 +1480,9 @@ Agribot therefore now serves two related purposes:
 The original major project provided the real engineering problem.
 
 The current research uses that experience to ask a narrower and measurable scientific question about the interaction between **perception, inference latency, computational constraints, and closed-loop autonomous navigation**.
+
+---
+
+# License
+
+The code in this repository is released under the Apache License 2.0. See [`LICENSE`](LICENSE). Check the licence of any third-party model or dataset separately (see the note on `crop_row_nav/models/`).

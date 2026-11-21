@@ -1,0 +1,24 @@
+# --- Secrets / local config (copy .env.example to .env)
+.env
+
+# --- ROS 2 / colcon
+build/
+install/
+log/
+
+# --- Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Pico firmware build output (attach .uf2 to a GitHub Release instead)
+firmware/pico2/build/
+*.uf2
+*.elf
+*.bin
+
+# --- Editors / OS
+.vscode/
+.idea/
+.DS_Store

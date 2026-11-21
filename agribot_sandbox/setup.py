@@ -16,7 +16,7 @@ setup(
     maintainer='root',
     maintainer_email='root@todo.todo',
     description='TODO: Package description',
-    license='TODO: License declaration',
+    license='Apache-2.0',
     extras_require={
         'test': [
             'pytest',
