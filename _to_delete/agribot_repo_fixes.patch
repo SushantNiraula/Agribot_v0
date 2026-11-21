@@ -1,0 +1,478 @@
+diff --git a/agribot_base/agribot_base/tick_to_odom.py b/agribot_base/agribot_base/tick_to_odom.py
+index be08d88..d4ba369 100644
+--- a/agribot_base/agribot_base/tick_to_odom.py
++++ b/agribot_base/agribot_base/tick_to_odom.py
+@@ -217,223 +217,4 @@ def main(args=None):
+ 
+ 
+ if __name__ == '__main__':
+-    main()#!/usr/bin/env python3
+-"""
+-tick_to_odom.py
+-Converts left/right encoder tick counts into:
+-  - /wheel/odometry  (nav_msgs/Odometry)  → fed into EKF
+-  - TF broadcast: odom → base_link        → direct transform for visualisation
+-
+-This node does NOT own the canonical /odom topic — the EKF
+-(robot_localization) publishes /odometry/filtered remapped to /odom.
+-"""
+-
+-import math
+-import rclpy
+-from rclpy.node import Node
+-from std_msgs.msg import Int32
+-from nav_msgs.msg import Odometry
+-from geometry_msgs.msg import Quaternion, TransformStamped
+-from tf2_ros import TransformBroadcaster
+-
+-
+-class TickToOdom(Node):
+-
+-    # ------------------------------------------------------------------ #
+-    #  Robot parameters — edit these to match your physical hardware       #
+-    # ------------------------------------------------------------------ #
+-    WHEEL_RADIUS_M   = 0.055   # metres
+-    WHEEL_BASE_M     = 0.50    # metres (centre-to-centre of wheels)
+-    TICKS_PER_REV    = 280.0   # encoder ticks per full wheel revolution
+-
+-    # Twist covariances (tuned empirically; increase if odometry is noisy)
+-    COV_VX   = 0.01   # variance on forward velocity  (m/s)²
+-    COV_VYAW = 0.05   # variance on yaw rate           (rad/s)²
+-
+-    # Pose covariances (driven by accumulated dead-reckoning error)
+-    COV_X    = 0.01   # x position
+-    COV_Y    = 0.01   # y position — same scale as x for a symmetric robot
+-    COV_YAW  = 0.05   # heading — larger because yaw error grows fastest
+-    # ------------------------------------------------------------------ #
+-
+-    TIMER_PERIOD_S = 0.05   # 20 Hz publish rate
+-
+-    def __init__(self):
+-        super().__init__('tick_to_odom')
+-
+-        # Derived constant
+-        self.meters_per_tick = (
+-            2.0 * math.pi * self.WHEEL_RADIUS_M / self.TICKS_PER_REV
+-        )
+-
+-        # --- Subscribers --------------------------------------------------
+-        self.sub_l = self.create_subscription(
+-            Int32, '/left_ticks',  self._left_cb,  10)
+-        self.sub_r = self.create_subscription(
+-            Int32, '/right_ticks', self._right_cb, 10)
+-
+-        # --- Publishers ---------------------------------------------------
+-        self.odom_pub = self.create_publisher(Odometry, '/wheel/odometry', 10)
+-
+-        # TF broadcaster lets rviz2 draw the robot frame without the EKF
+-        self.tf_broadcaster = TransformBroadcaster(self)
+-
+-        # --- State --------------------------------------------------------
+-        self.current_l = 0
+-        self.current_r = 0
+-        self.prev_l    = 0
+-        self.prev_r    = 0
+-        self.first_read = True
+-
+-        self.x  = 0.0
+-        self.y  = 0.0
+-        self.th = 0.0
+-
+-        self.last_time = self.get_clock().now()
+-
+-        # --- Timer --------------------------------------------------------
+-        self.create_timer(self.TIMER_PERIOD_S, self._update_and_publish)
+-
+-        self.get_logger().info(
+-            f'tick_to_odom ready — '
+-            f'{self.meters_per_tick*1000:.4f} mm/tick, '
+-            f'wheelbase={self.WHEEL_BASE_M*100:.1f} cm'
+-        )
+-
+-    # ------------------------------------------------------------------ #
+-    #  Callbacks                                                           #
+-    # ------------------------------------------------------------------ #
+-    def _left_cb(self, msg: Int32):
+-        self.current_l = msg.data
+-
+-    def _right_cb(self, msg: Int32):
+-        self.current_r = msg.data
+-
+-    # ------------------------------------------------------------------ #
+-    #  Main update loop                                                    #
+-    # ------------------------------------------------------------------ #
+-    def _update_and_publish(self):
+-        # On the very first call just snapshot the tick counts so we don't
+-        # get a huge phantom jump if the encoder already has a non-zero value.
+-        if self.first_read:
+-            self.prev_l = self.current_l
+-            self.prev_r = self.current_r
+-            self.first_read = False
+-            return
+-
+-        now = self.get_clock().now()
+-        dt  = (now - self.last_time).nanoseconds * 1e-9
+-
+-        # Guard against zero or negative dt (shouldn't happen but be safe)
+-        if dt <= 0.0:
+-            return
+-
+-        # ---- Delta ticks -----------------------------------------------
+-        delta_l = self.current_l - self.prev_l
+-        delta_r = self.current_r - self.prev_r
+-        self.prev_l = self.current_l
+-        self.prev_r = self.current_r
+-
+-        # ---- Convert to distances --------------------------------------
+-        d_l = delta_l * self.meters_per_tick
+-        d_r = delta_r * self.meters_per_tick
+-
+-        d_center = (d_l + d_r) / 2.0
+-        d_theta  = (d_r - d_l) / self.WHEEL_BASE_M
+-
+-        # ---- Velocities ------------------------------------------------
+-        v_x   = d_center / dt
+-        v_yaw = d_theta  / dt
+-
+-        # ---- Integrate pose --------------------------------------------
+-        self.th += d_theta
+-        self.x  += d_center * math.cos(self.th)
+-        self.y  += d_center * math.sin(self.th)
+-
+-        # ---- Build Odometry message ------------------------------------
+-        odom = Odometry()
+-        odom.header.stamp    = now.to_msg()
+-        odom.header.frame_id = 'odom'
+-        odom.child_frame_id  = 'base_link'
+-
+-        odom.pose.pose.position.x    = self.x
+-        odom.pose.pose.position.y    = self.y
+-        odom.pose.pose.position.z    = 0.0
+-        odom.pose.pose.orientation   = _yaw_to_quaternion(self.th)
+-
+-        odom.twist.twist.linear.x    = v_x
+-        odom.twist.twist.linear.y    = 0.0   # non-holonomic — no lateral slip
+-        odom.twist.twist.angular.z   = v_yaw
+-
+-        # Pose covariance (6×6 row-major, indices: x=0, y=7, yaw=35)
+-        # All off-diagonals stay 0.0 — we assume independent errors.
+-        pc = [0.0] * 36
+-        pc[0]  = self.COV_X      # σ²_x
+-        pc[7]  = self.COV_Y      # σ²_y
+-        pc[14] = 1e6             # z  — constrained by two_d_mode in EKF
+-        pc[21] = 1e6             # roll
+-        pc[28] = 1e6             # pitch
+-        pc[35] = self.COV_YAW   # σ²_yaw
+-        odom.pose.covariance = pc
+-
+-        # Twist covariance
+-        tc = [0.0] * 36
+-        tc[0]  = self.COV_VX    # σ²_vx
+-        tc[7]  = 1e6            # vy  — zero by constraint
+-        tc[14] = 1e6            # vz
+-        tc[21] = 1e6            # v_roll
+-        tc[28] = 1e6            # v_pitch
+-        tc[35] = self.COV_VYAW  # σ²_v_yaw
+-        odom.twist.covariance = tc
+-
+-        self.odom_pub.publish(odom)
+-
+-        # ---- Broadcast TF  odom → base_link ----------------------------
+-        # This is a raw dead-reckoning transform.  The EKF will publish its
+-        # own (filtered) version of the same transform — both can coexist
+-        # but you should set publish_tf=false in the EKF if you only want
+-        # one transform.  With publish_tf=true in ekf.yaml the EKF's TF
+-        # wins because it is published later (same stamp, different source).
+-        tf = TransformStamped()
+-        tf.header.stamp            = now.to_msg()
+-        tf.header.frame_id         = 'odom'
+-        tf.child_frame_id          = 'base_link'
+-        tf.transform.translation.x = self.x
+-        tf.transform.translation.y = self.y
+-        tf.transform.translation.z = 0.0
+-        tf.transform.rotation      = _yaw_to_quaternion(self.th)
+-        self.tf_broadcaster.sendTransform(tf)
+-
+-        self.last_time = now
+-
+-
+-# ------------------------------------------------------------------ #
+-#  Helper                                                              #
+-# ------------------------------------------------------------------ #
+-def _yaw_to_quaternion(yaw: float) -> Quaternion:
+-    """Convert a yaw angle (radians) to a geometry_msgs/Quaternion."""
+-    q = Quaternion()
+-    q.x = 0.0
+-    q.y = 0.0
+-    q.z = math.sin(yaw / 2.0)
+-    q.w = math.cos(yaw / 2.0)
+-    return q
+-
+-
+-# ------------------------------------------------------------------ #
+-#  Entry point                                                         #
+-# ------------------------------------------------------------------ #
+-def main(args=None):
+-    rclpy.init(args=args)
+-    node = TickToOdom()
+-    try:
+-        rclpy.spin(node)
+-    except KeyboardInterrupt:
+-        pass
+-    finally:
+-        node.destroy_node()
+-        rclpy.shutdown()
+-
+-
+-if __name__ == '__main__':
+-    main()
+\ No newline at end of file
++    main()
+diff --git a/agribot_bringup/launch/hardware.launch.py b/agribot_bringup/launch/hardware.launch.py
+index 428822f..9fbd346 100644
+--- a/agribot_bringup/launch/hardware.launch.py
++++ b/agribot_bringup/launch/hardware.launch.py
+@@ -5,21 +5,24 @@ from launch_ros.actions import Node
+ from ament_index_python.packages import get_package_share_directory
+ import os
+ from launch.substitutions import LaunchConfiguration
++from launch.conditions import IfCondition
+ 
+ def generate_launch_description():
+     pkg_bringup = get_package_share_directory('agribot_bringup')
+-    pkg_sllidar = get_package_share_directory('sllidar_ros2')
+     
+     lidar_port = LaunchConfiguration('lidar_port')
+     lidar_baud = LaunchConfiguration('lidar_baud')
+     
+-    sllidar_launch = os.path.join(
+-        get_package_share_directory('sllidar_ros2'),
+-        'launch',
+-        'sllidar_a1_launch.py'
+-    )
++    # The RPLidar was used only in the first navigation iteration; it is off by default.
++    use_lidar = LaunchConfiguration('use_lidar')
++    try:
++        sllidar_launch = os.path.join(
++            get_package_share_directory('sllidar_ros2'), 'launch', 'sllidar_a1_launch.py')
++    except Exception:
++        sllidar_launch = None
+ 
+     return LaunchDescription([
++        DeclareLaunchArgument('use_lidar', default_value='false'),
+         DeclareLaunchArgument('lidar_port', default_value='/dev/ttyUSB1'),
+         DeclareLaunchArgument('lidar_baud', default_value='115200'),
+         
+@@ -55,14 +58,15 @@ def generate_launch_description():
+         ),
+ 
+         # 4. RPLidar A1
+-        IncludeLaunchDescription(
++        *([IncludeLaunchDescription(
+             PythonLaunchDescriptionSource(sllidar_launch),
+             launch_arguments={
+                 'serial_port': lidar_port,
+                 'serial_baudrate': lidar_baud,
+                 'frame_id': 'base_laser'
+-            }.items()
+-        ),
++            }.items(),
++            condition=IfCondition(use_lidar)
++        )] if sllidar_launch else []),
+         # # 5. Pi Camera V1.3 (Updated with remapping)
+         # Node(
+         #     package='camera_ros',
+diff --git a/agribot_bringup/launch/pi_autonomy.launch.py b/agribot_bringup/launch/pi_autonomy.launch.py
+index c94a44f..b781821 100644
+--- a/agribot_bringup/launch/pi_autonomy.launch.py
++++ b/agribot_bringup/launch/pi_autonomy.launch.py
+@@ -1,85 +1,70 @@
+-import os
++"""Autonomous crop-row task on the Raspberry Pi 4.
++
++Starts: hardware.launch.py (micro-ROS agent, Madgwick filter, tick_to_odom,
++camera, image throttler, robot description), the EKF, the arm action server,
++the ESP32-CAM node and one navigator.
++
++  ros2 launch agribot_bringup pi_autonomy.launch.py esp32_ip:=192.168.1.100
++  ros2 launch agribot_bringup pi_autonomy.launch.py nav_type:=green_follower
++"""
+ from launch import LaunchDescription
+-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, RegisterEventHandler
++from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
++from launch.conditions import LaunchConfigurationEquals
+ from launch.launch_description_sources import PythonLaunchDescriptionSource
+ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+ from launch_ros.actions import Node
+ from launch_ros.substitutions import FindPackageShare
+-from launch.event_handlers import OnProcessStart
+-from launch.conditions import LaunchConfigurationEquals # <-- Added for if/else logic
+ 
+-def generate_launch_description():
+-    esp32_ip_arg = DeclareLaunchArgument(
+-        'esp32_ip', default_value='192.168.1.100', description='IP address of the ESP32-CAM'
+-    )
+ 
+-    # --- NEW: Launch argument to select your navigator ---
+-    nav_type_arg = DeclareLaunchArgument(
+-        'nav_type', default_value='green_follower', 
+-        description='Which navigation to use: "crop_row" or "green_follower"'
+-    )
++def generate_launch_description():
++    esp32_ip = LaunchConfiguration('esp32_ip')
+ 
+     hardware_launch = IncludeLaunchDescription(
+-        PythonLaunchDescriptionSource([
+-            PathJoinSubstitution([FindPackageShare('agribot_bringup'), 'launch', 'hardware.launch.py'])
+-        ])
++        PythonLaunchDescriptionSource(PathJoinSubstitution(
++            [FindPackageShare('agribot_bringup'), 'launch', 'hardware.launch.py'])),
++        launch_arguments={'use_lidar': 'false'}.items(),
+     )
+ 
+-    odom_node = Node(package='agribot_base', executable='tick_to_odom', name='tick_to_odom')
+-    
+-    ekf_config_path = PathJoinSubstitution([
+-        FindPackageShare('agribot_base'), 'config', 'ekf.yaml'
+-    ])
+-    
++    # tick_to_odom is already started by hardware.launch.py.
+     ekf_node = Node(
+-        package='robot_localization',
+-        executable='ekf_node',
+-        name='ekf_filter_node',
++        package='robot_localization', executable='ekf_node', name='ekf_filter_node',
+         output='screen',
+-        parameters=[ekf_config_path],
+-        remappings=[('/odometry/filtered', '/odom')]
++        parameters=[PathJoinSubstitution(
++            [FindPackageShare('agribot_bringup'), 'config', 'ekf.yaml'])],
++        remappings=[('/odometry/filtered', '/odom')],
+     )
+ 
+-    arm_controller_node = Node(package='arm_control', executable='arm_controller', name='arm_controller')
+-    
+-    esp32_cam_node = Node(
+-        package='esp_cam_work', executable='esp32_cam_node', name='esp32_cam',
+-        parameters=[{'esp32_ip': LaunchConfiguration('esp32_ip')}]
+-    )
+-
+-    image_throttler_node = Node(package='crop_row_nav', executable='image_throttler', name='image_throttler')
+-    
+-    # --- The Navigation Nodes (Mutually Exclusive) ---
+-    crop_navigator_node = Node(
+-        package='crop_row_nav', executable='crop_row_navigator', name='crop_row_navigator', output='screen',
+-        condition=LaunchConfigurationEquals('nav_type', 'crop_row')
++    arm_node = Node(
++        package='arm_control', executable='arm_action_controller',
++        name='arm_action_controller', output='screen',
++        parameters=[{'esp32_ip': esp32_ip}],
+     )
+ 
+-    green_follower_node = Node(
+-        package='crop_row_nav', executable='green_follower', name='green_follower', output='screen',
+-        condition=LaunchConfigurationEquals('nav_type', 'green_follower')
++    esp32_cam_node = Node(
++        package='esp_cam_work', executable='esp32_cam_node', name='esp32_cam',
++        parameters=[{'esp32_ip': esp32_ip}],
+     )
+ 
+-    # Event handlers to let you know which one successfully booted
+-    log_crop_nav = RegisterEventHandler(
+-        OnProcessStart(target_action=crop_navigator_node, on_start=[LogInfo(msg="🟢 SUCCESS: Model Crop Row Navigator is online!")])
++    crop_row_nav = Node(
++        package='crop_row_nav', executable='crop_row_navigator',
++        name='crop_row_navigator', output='screen',
++        condition=LaunchConfigurationEquals('nav_type', 'crop_row'),
+     )
+-    
+-    log_green_nav = RegisterEventHandler(
+-        OnProcessStart(target_action=green_follower_node, on_start=[LogInfo(msg="🟢 SUCCESS: Basic Green Follower is online!")])
++    green_follower = Node(
++        package='crop_row_nav', executable='green_follower',
++        name='green_follower', output='screen',
++        condition=LaunchConfigurationEquals('nav_type', 'green_follower'),
+     )
+ 
+     return LaunchDescription([
+-        esp32_ip_arg,
+-        nav_type_arg, # <-- Added the argument
++        DeclareLaunchArgument('esp32_ip', default_value='192.168.1.100',
++                              description='IP address of the ESP32-CAM'),
++        DeclareLaunchArgument('nav_type', default_value='crop_row',
++                              description='"crop_row" (HSV strip navigator) or "green_follower"'),
+         hardware_launch,
+-        odom_node,
+-        ekf_node,               
+-        arm_controller_node,
++        ekf_node,
++        arm_node,
+         esp32_cam_node,
+-        image_throttler_node,
+-        # crop_navigator_node,   # Only runs if nav_type=crop_row
+-        # green_follower_node,   # Only runs if nav_type=green_follower
+-        log_crop_nav,
+-        log_green_nav
+-    ])
+\ No newline at end of file
++        crop_row_nav,
++        green_follower,
++    ])
+diff --git a/arm_control/arm_control/arm_action_controller.py b/arm_control/arm_control/arm_action_controller.py
+index e38ccf5..352d9c2 100644
+--- a/arm_control/arm_control/arm_action_controller.py
++++ b/arm_control/arm_control/arm_action_controller.py
+@@ -42,7 +42,8 @@ class ArmControllerNode(Node):
+         super().__init__('arm_action_controller')
+         self.bridge = CvBridge()
+         self.kit = ServoKit(channels=16, i2c=i2c_bus)
+-        self.esp_ip = '10.63.158.232'
++        self.declare_parameter('esp32_ip', '10.63.158.232')
++        self.esp_ip = self.get_parameter('esp32_ip').get_parameter_value().string_value
+         
+         # ==========================================================
+         # WAYPOINTS
+diff --git a/firmware/pico2/README.md b/firmware/pico2/README.md
+index d4b89b6..adfed2a 100644
+--- a/firmware/pico2/README.md
++++ b/firmware/pico2/README.md
+@@ -9,13 +9,12 @@ and publishes encoder ticks and IMU data to a micro-ROS agent over USB serial.
+ | Item | State |
+ | --- | --- |
+ | Source in `src/` | Recovered copy of the firmware described in the paper (comment fix only) |
+-| Command timeout (stop when `/cmd_vel` stops) | **Not in this version.** See safety note |
++| Command timeout (stop when `/cmd_vel` stops) | In `main.cpp` (500 ms). Not evaluated in the paper; test it before relying on it |
+ | `CMakeLists.txt` | Template, not yet build-tested from a clean checkout |
+ 
+ ## Safety
+ 
+-This version keeps driving the last wheel setpoint if the agent or the Pi
+-disappears. Do not run it unattended. Keep wheels off the ground or keep a
++The 500 ms command timeout has not been tested on hardware. Do not run unattended. Keep wheels off the ground or keep a
+ power cut-off within reach during any test.
+ 
+ ## Interfaces
+@@ -26,7 +25,7 @@ power cut-off within reach during any test.
+ | `/left_ticks`, `/right_ticks` | `std_msgs/Int32` | publish | 20 Hz |
+ | `/imu/data_raw` | `sensor_msgs/Imu` (frame `imu_link`) | publish | 20 Hz |
+ 
+-Control loop: 25 Hz (`CONTROL_DT = 0.04 s`). Pins and robot constants are at the top of `src/main.cpp`.
++Control loop: 25 Hz (`CONTROL_DT = 0.04 s`). Pins and robot constants are at the top of `src/main.cpp`. Wheel radius 0.055 m, wheel base 0.50 m, 280 ticks/rev, matching `agribot_base/tick_to_odom.py`.
+ 
+ ## Build (Ubuntu 24.04, ROS 2 Jazzy)
+ 
+diff --git a/firmware/pico2/src/main.cpp b/firmware/pico2/src/main.cpp
+index 2799aa9..3bea82c 100644
+--- a/firmware/pico2/src/main.cpp
++++ b/firmware/pico2/src/main.cpp
+@@ -51,8 +51,8 @@ volatile uint32_t last_cmd_time_us = 0;
+ const uint32_t CMD_TIMEOUT_US = 500000; // 500 ms
+ 
+ // Robot Kinematics Constants
+-const float WHEEL_RADIUS = 0.06f; // Meters
+-const float WHEEL_BASE = 0.45f;   // Meters
++const float WHEEL_RADIUS = 0.055f; // Meters (same value as tick_to_odom)
++const float WHEEL_BASE = 0.50f;   // Meters (same value as tick_to_odom)
+ const float TICKS_PER_REV = 280.0f;
+ const float TICKS_PER_METER = TICKS_PER_REV / (2.0f * M_PI * WHEEL_RADIUS);
+ 
