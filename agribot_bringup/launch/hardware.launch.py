@@ -5,21 +5,24 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
 from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
 
 def generate_launch_description():
     pkg_bringup = get_package_share_directory('agribot_bringup')
-    pkg_sllidar = get_package_share_directory('sllidar_ros2')
     
     lidar_port = LaunchConfiguration('lidar_port')
     lidar_baud = LaunchConfiguration('lidar_baud')
     
-    sllidar_launch = os.path.join(
-        get_package_share_directory('sllidar_ros2'),
-        'launch',
-        'sllidar_a1_launch.py'
-    )
+    # The RPLidar was used only in the first navigation iteration; it is off by default.
+    use_lidar = LaunchConfiguration('use_lidar')
+    try:
+        sllidar_launch = os.path.join(
+            get_package_share_directory('sllidar_ros2'), 'launch', 'sllidar_a1_launch.py')
+    except Exception:
+        sllidar_launch = None
 
     return LaunchDescription([
+        DeclareLaunchArgument('use_lidar', default_value='false'),
         DeclareLaunchArgument('lidar_port', default_value='/dev/ttyUSB1'),
         DeclareLaunchArgument('lidar_baud', default_value='115200'),
         
@@ -55,14 +58,15 @@ def generate_launch_description():
         ),
 
         # 4. RPLidar A1
-        IncludeLaunchDescription(
+        *([IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sllidar_launch),
             launch_arguments={
                 'serial_port': lidar_port,
                 'serial_baudrate': lidar_baud,
                 'frame_id': 'base_laser'
-            }.items()
-        ),
+            }.items(),
+            condition=IfCondition(use_lidar)
+        )] if sllidar_launch else []),
         # # 5. Pi Camera V1.3 (Updated with remapping)
         # Node(
         #     package='camera_ros',

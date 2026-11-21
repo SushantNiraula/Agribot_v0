@@ -42,7 +42,8 @@ class ArmControllerNode(Node):
         super().__init__('arm_action_controller')
         self.bridge = CvBridge()
         self.kit = ServoKit(channels=16, i2c=i2c_bus)
-        self.esp_ip = '10.63.158.232'
+        self.declare_parameter('esp32_ip', '10.63.158.232')
+        self.esp_ip = self.get_parameter('esp32_ip').get_parameter_value().string_value
         
         # ==========================================================
         # WAYPOINTS

@@ -9,13 +9,12 @@ and publishes encoder ticks and IMU data to a micro-ROS agent over USB serial.
 | Item | State |
 | --- | --- |
 | Source in `src/` | Recovered copy of the firmware described in the paper (comment fix only) |
-| Command timeout (stop when `/cmd_vel` stops) | **Not in this version.** See safety note |
+| Command timeout (stop when `/cmd_vel` stops) | In `main.cpp` (500 ms). Not evaluated in the paper; test it before relying on it |
 | `CMakeLists.txt` | Template, not yet build-tested from a clean checkout |
 
 ## Safety
 
-This version keeps driving the last wheel setpoint if the agent or the Pi
-disappears. Do not run it unattended. Keep wheels off the ground or keep a
+The 500 ms command timeout has not been tested on hardware. Do not run unattended. Keep wheels off the ground or keep a
 power cut-off within reach during any test.
 
 ## Interfaces
@@ -26,7 +25,7 @@ power cut-off within reach during any test.
 | `/left_ticks`, `/right_ticks` | `std_msgs/Int32` | publish | 20 Hz |
 | `/imu/data_raw` | `sensor_msgs/Imu` (frame `imu_link`) | publish | 20 Hz |
 
-Control loop: 25 Hz (`CONTROL_DT = 0.04 s`). Pins and robot constants are at the top of `src/main.cpp`.
+Control loop: 25 Hz (`CONTROL_DT = 0.04 s`). Pins and robot constants are at the top of `src/main.cpp`. Wheel radius 0.055 m, wheel base 0.50 m, 280 ticks/rev, matching `agribot_base/tick_to_odom.py`.
 
 ## Build (Ubuntu 24.04, ROS 2 Jazzy)
 

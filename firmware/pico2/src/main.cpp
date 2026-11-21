@@ -51,8 +51,8 @@ volatile uint32_t last_cmd_time_us = 0;
 const uint32_t CMD_TIMEOUT_US = 500000; // 500 ms
 
 // Robot Kinematics Constants
-const float WHEEL_RADIUS = 0.06f; // Meters
-const float WHEEL_BASE = 0.45f;   // Meters
+const float WHEEL_RADIUS = 0.055f; // Meters (same value as tick_to_odom)
+const float WHEEL_BASE = 0.50f;   // Meters (same value as tick_to_odom)
 const float TICKS_PER_REV = 280.0f;
 const float TICKS_PER_METER = TICKS_PER_REV / (2.0f * M_PI * WHEEL_RADIUS);
 
